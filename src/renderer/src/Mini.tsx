@@ -1,4 +1,6 @@
 import { CalendarDays, ClipboardList, Maximize2, Settings } from 'lucide-react'
+import { EventList } from './EventList'
+import { upcoming, useCalendar } from './lib/calendar'
 import { formatShortDate } from './lib/dates'
 import { useAppState, useNow } from './lib/hooks'
 
@@ -7,6 +9,8 @@ export default function Mini() {
   const now = useNow(30_000)
   const { state } = useAppState()
   const tissConnected = state?.secrets.tissToken ?? false
+  const calendar = useCalendar()
+  const next = calendar ? upcoming(calendar, now, 4) : []
 
   return (
     <div className="mini">
@@ -20,12 +24,14 @@ export default function Mini() {
         </button>
       </header>
 
-      <section className="mini-section">
+      <section className="mini-section mini-grow">
         <h3>
           <CalendarDays size={13} /> Termine
         </h3>
-        {tissConnected ? (
-          <p className="mini-empty">TISS ist verbunden. Deine Termine erscheinen hier ab Phase 1.</p>
+        {calendar && next.length > 0 ? (
+          <EventList data={calendar} events={next} now={now} compact />
+        ) : tissConnected ? (
+          <p className="mini-empty">Keine kommenden Termine.</p>
         ) : (
           <p className="mini-empty">
             Noch keine Termine.{' '}

@@ -1,12 +1,17 @@
 import type { ReactNode } from 'react'
-import { CalendarDays, Circle, CircleCheck, ClipboardList, Clock } from 'lucide-react'
+import { CalendarDays, Circle, CircleCheck, ClipboardList, Clock, PartyPopper } from 'lucide-react'
 import type { View } from '../../../shared/types'
+import { EventList } from '../EventList'
+import { holidayOn, upcoming, useCalendar } from '../lib/calendar'
 import { formatLongDate, greeting } from '../lib/dates'
 import { useAppState, useNow } from '../lib/hooks'
 
 export default function Today({ onNavigate }: { onNavigate: (view: View) => void }) {
   const now = useNow(60_000)
   const { state } = useAppState()
+  const calendar = useCalendar()
+  const next = calendar ? upcoming(calendar, now, 6) : []
+  const holiday = calendar ? holidayOn(calendar, now) : undefined
   const tissConnected = state?.secrets.tissToken ?? false
   const toSettings = (
     <button type="button" className="button small secondary" onClick={() => onNavigate('settings')}>
@@ -26,10 +31,23 @@ export default function Today({ onNavigate }: { onNavigate: (view: View) => void
           <h2 className="card-title">
             <CalendarDays size={16} /> Nächste Termine
           </h2>
+          {holiday && (
+            <p className="holiday-note">
+              <PartyPopper size={14} /> {holiday.title}
+            </p>
+          )}
+          {calendar && next.length > 0 ? (
+            <>
+              <EventList data={calendar} events={next} now={now} />
+              <button type="button" className="link" onClick={() => onNavigate('calendar')}>
+                Zum Kalender
+              </button>
+            </>
+          ) : (
           <div className="empty">
             <strong>Noch keine Termine</strong>
             {tissConnected ? (
-              <span>Dein TISS-Kalender ist verbunden. Die Termine erscheinen hier, sobald der Kalender fertig ist (Phase 1).</span>
+              <span>{calendar?.error ? `TISS konnte nicht gelesen werden: ${calendar.error}` : 'In deinem TISS-Kalender steht nichts Kommendes.'}</span>
             ) : (
               <>
                 <span>Verbinde deinen TISS-Kalender, dann siehst du hier, was als Nächstes ansteht.</span>
@@ -39,6 +57,7 @@ export default function Today({ onNavigate }: { onNavigate: (view: View) => void
               </>
             )}
           </div>
+          )}
         </section>
 
         <section className="card">

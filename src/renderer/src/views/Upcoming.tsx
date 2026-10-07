@@ -1,23 +1,10 @@
-import { CalendarDays, Check, ClipboardList, NotebookPen, type LucideIcon } from 'lucide-react'
+import { Check, ClipboardList, NotebookPen, type LucideIcon } from 'lucide-react'
 import type { View } from '../../../shared/types'
 
-type UpcomingView = Exclude<View, 'today' | 'settings'>
+type UpcomingView = Exclude<View, 'today' | 'calendar' | 'settings'>
 
 /** Placeholder pages for the parts that come in later phases (see PLAN.md). */
 const PAGES: Record<UpcomingView, { title: string; intro: string; phase: number; icon: LucideIcon; features: string[] }> = {
-  calendar: {
-    title: 'Kalender',
-    intro: 'Dein Stundenplan, direkt aus TISS.',
-    phase: 1,
-    icon: CalendarDays,
-    features: [
-      'LVA-, Gruppen- und Prüfungstermine aus deinem TISS-Kalender',
-      'Ansichten Heute, Woche, Monat und Liste',
-      'Eine Farbe pro Fach, Filter nach Fach und Typ (VO, UE, Prüfung)',
-      'Raum mit TUW-Maps-Link, Links zu TISS und TUWEL',
-      'Funktioniert auch offline'
-    ]
-  },
   deadlines: {
     title: 'Abgaben & Tests',
     intro: 'Was du noch offen hast, direkt aus TUWEL.',

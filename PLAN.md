@@ -74,17 +74,18 @@ Dazu:
 - [x] Start über XWayland mit `--ozone-platform=x11` (ohne den Schalter startet sout sich einmal selbst neu)
 - [ ] Mit installierter Extension prüfen: Öffnet der Linksklick aufs Symbol die Mini-Ansicht? Bekommt das Mini-Fenster den Fokus und schließt es bei Klick daneben?
 
-### Phase 1 – Kalender (TISS)
+### Phase 1 – Kalender (TISS) ✅ (bis auf eigene Termine)
 
-- [ ] TISS-Feed laden (beim Start, stündlich, nach dem Aufwachen) und lokal zwischenspeichern → offline nutzbar, „zuletzt synchronisiert“
-- [ ] Fächer automatisch anlegen (LVA-Nr + Semester), Typ erkennen (VO, UE, VU, Prüfung …)
-- [ ] Ansichten: Heute, Woche, Monat, Liste (z. B. FullCalendar)
-- [ ] Eine Farbe pro Fach, überall gleich (Kalender, Abgaben, Notizen); Filter nach Fach und Typ
+- [x] TISS-Feed laden (beim Start, stündlich, nach dem Aufwachen) und lokal zwischenspeichern (`calendar.json`) → offline nutzbar, „Stand: …“
+- [x] Fächer automatisch erkennen (LVA-Nr), Typ (VO, UE, VU …); Termine als Vorlesung, Gruppe, Prüfung oder vorlesungsfrei
+- [x] TISS führt Vorlesungen mit Ausweich-/Übertragungsraum doppelt – sie werden zu einem Termin zusammengefasst
+- [x] Ansichten Tag, Woche, Monat, Liste (FullCalendar 6)
+- [x] Eine Farbe pro Fach, Filter nach Fach (dauerhaft) und Typ
+- [x] Kurznamen: standardmäßig Abkürzungen (ADM, EP1, GDS), in den Einstellungen änderbar, ebenso Farbe und Ausblenden
+- [x] Termin-Details: Raum mit TUW-Maps-Link und Adresse (Raumliste aus better-tiss-calendar), Link zur LVA in TISS
+- [x] „Heute“ und Mini-Fenster zeigen die nächsten Termine, mit „in 25 min“ / „läuft“
 - [ ] Eigene Termine (Lerngruppe, Lernblöcke)
-- [ ] Termin-Details: Raum mit TUW-Maps-Link, Links zu TISS und TUWEL, „Mitschrift öffnen“
-- [ ] Kurznamen für Fächer (z. B. „AlgoDat“)
-- [ ] Mini-Fenster und „Heute“ zeigen die nächsten Termine
-- später: Raum → Adresse und Stockwerk, LectureTube-Link; Änderungen erkennen (Raumwechsel, Absage) und melden; Überschneidungen markieren
+- später: Link zum TUWEL-Kurs (kommt mit Phase 2), „Mitschrift öffnen“ (Phase 3), LectureTube-Link, Änderungen erkennen (Raumwechsel, Absage) und melden, Überschneidungen markieren
 
 ### Phase 2 – Abgaben & Tests (TUWEL)
 
@@ -129,6 +130,6 @@ Lernplaner (vom Prüfungstermin rückwärts Lernblöcke einplanen) · Lernzeit p
 
 ## Offene Punkte
 
-- Stehen Anmeldefristen (LVA, Gruppe, Prüfung) im TISS-Feed?
+- Anmeldefristen (LVA, Gruppe, Prüfung) stehen nicht im TISS-Feed (geprüft 7.10.2026: nur COURSE, GROUP, EXAM_SLOT, HOLIDAY).
 - Liefert die TUWEL-Schnittstelle Kreuzerlübungen und Terminbuchungen?
 - Linksklick aufs Tray-Symbol unter GNOME: Mini-Ansicht oder Menü? (Fallback: „Mini-Ansicht“ ist der erste Menüeintrag.)

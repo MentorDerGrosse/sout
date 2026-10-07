@@ -3,7 +3,7 @@
 Desktop-App fürs Studium an der TU Wien: Kalender aus TISS, Abgaben aus TUWEL, Notizen pro Fach.
 Läuft im Hintergrund weiter, mit einem kleinen Fenster oben rechts (wie die JetBrains Toolbox).
 
-Stand: Phase 0 (Grundgerüst). Plan, Entscheidungen und Hintergründe: [PLAN.md](PLAN.md).
+Stand: Phase 1 (Kalender aus TISS). Plan, Entscheidungen und Hintergründe: [PLAN.md](PLAN.md).
 
 ## Voraussetzungen
 
@@ -41,6 +41,8 @@ npm run install-desktop    # Eintrag in der App-Übersicht + Befehl ~/.local/bin
 |---|---|
 | `~/.config/sout/settings.json` | Einstellungen |
 | `~/.config/sout/secrets.json` | Tokens, verschlüsselt (Schlüssel im GNOME-Schlüsselbund) |
+| `~/.config/sout/calendar.json` | zwischengespeicherte TISS-Termine |
+| `~/.config/sout/courses.json` | Kurznamen, Farben, ausgeblendete Fächer |
 | `~/.config/autostart/sout.desktop` | nur wenn Autostart an ist |
 
 ## XWayland
@@ -62,3 +64,16 @@ node_modules/electron/dist/electron . --ozone-platform=x11 --smoke-test=/tmp/sou
 
 Startet alles unsichtbar, legt Screenshots der Ansichten und `report.json` im angegebenen Ordner ab und beendet sich.
 Nutzt einen eigenen Datenordner und nicht den Schlüsselbund.
+
+Hilfen für die Entwicklung (nur ungepackt):
+
+| | |
+|---|---|
+| `--dump-tiss=<datei>` | speichert deinen TISS-Feed roh in eine Datei (zum Anschauen des Formats) |
+| `SOUT_TISS_FILE=<datei>` | liest den Kalender aus dieser Datei statt von TISS – z. B. für den Testlauf mit echten Daten |
+| `SOUT_SMOKE_THEME=light` | Testlauf im hellen statt dunklen Modus |
+
+## Danke
+
+Die Raumliste `resources/rooms.csv` (Adressen, TUW-Maps-Codes) stammt aus
+[better-tiss-calendar](https://github.com/flofriday/better-tiss-calendar) von flofriday (MIT-Lizenz, siehe `resources/rooms.LICENSE`).

@@ -1,13 +1,15 @@
-import { app, BrowserWindow, Menu, screen } from 'electron'
+import { app, BrowserWindow, Menu, nativeTheme, screen } from 'electron'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { IPC, type View } from '../shared/types'
 import { autostartEntry } from './autostart'
+import { startCalendarSync, syncCalendar } from './calendar'
 import { registerIpc } from './ipc'
-import { secretsStatus } from './secrets'
+import { getSecret, secretsStatus } from './secrets'
 import { trayHostAvailable, windowSystem } from './system'
+import { fetchTissFeed } from './tiss'
 import { createTray } from './tray'
-import { createMainWindow, createMiniWindow } from './windows'
+import { broadcast, createMainWindow, createMiniWindow } from './windows'
 
 // `--smoke-test=<dir>` (development only): starts everything without showing a window, takes
 // screenshots of the views, writes report.json and quits. Uses its own data folder and no keyring.
@@ -50,9 +52,14 @@ export async function runSmokeTest(dir: string): Promise<void> {
 
   try {
     await app.whenReady()
+    // SOUT_SMOKE_THEME=light|dark checks the other colour scheme without touching the GNOME setting.
+    const theme = process.env['SOUT_SMOKE_THEME']
+    if (theme === 'light' || theme === 'dark') nativeTheme.themeSource = theme
     report['gpu'] = app.getGPUFeatureStatus()
     Menu.setApplicationMenu(null)
     registerIpc()
+    startCalendarSync(() => broadcast(IPC.calendarChanged))
+    await syncCalendar()
     report['trayHost'] = await trayHostAvailable()
     createTray(report['trayHost'] as boolean | null)
     const mini = createMiniWindow()
@@ -66,6 +73,21 @@ export async function runSmokeTest(dir: string): Promise<void> {
       await delay(500)
       screenshots[view] = await screenshot(main, dir, view)
     }
+    // Calendar details and the other views (only meaningful with events, e.g. via SOUT_TISS_FILE).
+    main.webContents.send(IPC.navigate, 'calendar')
+    await delay(500)
+    const click = (selector: string): Promise<unknown> =>
+      main.webContents.executeJavaScript(`document.querySelector(${JSON.stringify(selector)})?.click()`)
+    await click('.fc-timegrid-event')
+    await delay(300)
+    screenshots['calendar-details'] = await screenshot(main, dir, 'calendar-details')
+    for (const view of ['dayGridMonth', 'listMonth']) {
+      await click(`.fc-${view}-button`)
+      await delay(400)
+      screenshots[view] = await screenshot(main, dir, view)
+    }
+    main.webContents.send(IPC.navigate, 'settings')
+    await delay(400)
     await main.webContents.executeJavaScript('document.querySelector(".content").scrollTo(0, 1e6)')
     await delay(300)
     screenshots['settings-bottom'] = await screenshot(main, dir, 'settings-bottom')
@@ -103,3 +125,21 @@ async function screenshot(win: BrowserWindow, dir: string, name: string): Promis
 }
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
+/** `--dump-tiss=<file>` (development only): saves the raw TISS feed, to look at its format. */
+export function tissDumpFile(argv: string[]): string | null {
+  const arg = argv.find((value) => value.startsWith('--dump-tiss='))
+  return arg && !app.isPackaged ? arg.slice('--dump-tiss='.length) : null
+}
+
+export async function dumpTiss(file: string): Promise<void> {
+  await app.whenReady()
+  const token = getSecret('tissToken')
+  if (!token) {
+    console.error('Kein TISS-Token gespeichert.')
+    app.exit(1)
+    return
+  }
+  writeFileSync(file, await fetchTissFeed(token))
+  app.exit(0)
+}

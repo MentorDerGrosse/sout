@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { KeyRound, LoaderCircle } from 'lucide-react'
-import type { AppInfo, SecretsStatus } from '../../../shared/types'
+import type { AppInfo, Course, SecretsStatus } from '../../../shared/types'
 import { Callout, Command, Toggle } from '../components'
+import { syncStatus, useCalendar } from '../lib/calendar'
 import { useAppState } from '../lib/hooks'
 
 const INSTALL_EXTENSION = 'sudo dnf install gnome-shell-extension-appindicator'
@@ -89,6 +90,8 @@ export default function SettingsView() {
           </div>
         </div>
       </section>
+
+      <CoursesSection />
 
       <section className="section">
         <h2>Info</h2>
@@ -181,6 +184,7 @@ function TissRow({ connected, onChanged }: { connected: boolean; onChanged: () =
         </div>
         <span className={`pill${connected ? ' ok' : ''}`}>{connected ? 'verbunden' : 'nicht verbunden'}</span>
       </div>
+      {connected && <SyncLine />}
       {connected ? (
         <div className="form-row">
           <button type="button" className="button secondary" disabled={busy} onClick={() => void test()}>
@@ -251,5 +255,65 @@ function InfoList({ info }: { info: AppInfo }) {
         <code>{info.autostartFile}</code>
       </dd>
     </dl>
+  )
+}
+
+function SyncLine() {
+  const calendar = useCalendar()
+  if (!calendar) return null
+  return (
+    <div className="row-desc">
+      {syncStatus(calendar)}
+      {calendar.error && ` · Fehler: ${calendar.error}`}
+    </div>
+  )
+}
+
+function CoursesSection() {
+  const calendar = useCalendar()
+  if (!calendar || calendar.courses.length === 0) return null
+  return (
+    <section className="section">
+      <h2>Fächer</h2>
+      <div className="rows">
+        {calendar.courses.map((course) => (
+          <CourseRow key={course.key} course={course} />
+        ))}
+      </div>
+      <p className="section-hint">Erkannt aus deinem TISS-Kalender. Der Kurzname erscheint im Kalender und in der Mini-Ansicht.</p>
+    </section>
+  )
+}
+
+function CourseRow({ course }: { course: Course }) {
+  const update = (patch: Parameters<typeof window.sout.updateCourse>[1]): void => void window.sout.updateCourse(course.key, patch)
+  return (
+    <div className="row course-row">
+      <input
+        type="color"
+        className="color-input"
+        value={course.color}
+        aria-label={`Farbe für ${course.shortName}`}
+        onChange={(event) => update({ color: event.target.value })}
+      />
+      <div className="row-text">
+        <input
+          key={course.shortName}
+          className="input course-name"
+          defaultValue={course.shortName}
+          aria-label="Kurzname"
+          onBlur={(event) => {
+            if (event.target.value !== course.shortName) update({ shortName: event.target.value })
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') event.currentTarget.blur()
+          }}
+        />
+        <div className="row-desc">
+          {course.key} {course.type} {course.title}
+        </div>
+      </div>
+      <Toggle label={`${course.shortName} anzeigen`} checked={!course.hidden} onChange={(shown) => update({ hidden: !shown })} />
+    </div>
   )
 }

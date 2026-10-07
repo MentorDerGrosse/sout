@@ -1,6 +1,7 @@
 import { app, ipcMain } from 'electron'
-import { IPC, isView, type AppInfo, type Result } from '../shared/types'
+import { IPC, isView, type AppInfo, type CoursePatch, type Result } from '../shared/types'
 import { autostartFile, isAutostartEnabled, setAutostart } from './autostart'
+import { calendarData, clearCalendar, syncCalendar, updateCourse } from './calendar'
 import { launcherPath } from './paths'
 import { clearSecret, getSecret, secretsStatus, setSecret } from './secrets'
 import { getSettings, updateSettings } from './settings'
@@ -61,6 +62,7 @@ export function registerIpc(): void {
     try {
       setSecret('tissToken', token)
       changed()
+      void syncCalendar()
       return ok(secretsStatus())
     } catch (error) {
       return fail(error)
@@ -77,8 +79,18 @@ export function registerIpc(): void {
   })
   ipcMain.handle(IPC.clearSecret, (_event, key: unknown) => {
     if (key === 'tissToken' || key === 'tuwelToken') clearSecret(key)
+    if (key === 'tissToken') clearCalendar()
     changed()
     return secretsStatus()
+  })
+  ipcMain.handle(IPC.getCalendar, () => calendarData())
+  ipcMain.handle(IPC.syncCalendar, async () => {
+    await syncCalendar()
+    return calendarData()
+  })
+  ipcMain.handle(IPC.updateCourse, (_event, key: unknown, patch: unknown) => {
+    if (typeof key === 'string' && patch && typeof patch === 'object') updateCourse(key, patch as CoursePatch)
+    return calendarData()
   })
   ipcMain.on(IPC.openMain, (_event, view: unknown) => {
     hideMini()

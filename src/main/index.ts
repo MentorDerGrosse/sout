@@ -1,11 +1,13 @@
 import { app, Menu } from 'electron'
+import { IPC } from '../shared/types'
 import { AUTOSTART_ARG } from './autostart'
+import { startCalendarSync } from './calendar'
 import { registerIpc } from './ipc'
 import { getSettings } from './settings'
-import { runSmokeTest, smokeTestDir } from './smoke'
+import { dumpTiss, runSmokeTest, smokeTestDir, tissDumpFile } from './smoke'
 import { displayArgs, fixCursorSize, trayHostAvailable } from './system'
 import { createTray, ensureTray } from './tray'
-import { createMiniWindow, notifyRunningInBackground, setOnMainClosed, showMain, toggleMini } from './windows'
+import { broadcast, createMiniWindow, notifyRunningInBackground, setOnMainClosed, showMain, toggleMini } from './windows'
 
 /** `sout --mini` toggles the mini window – meant for a GNOME keyboard shortcut. */
 const MINI_ARG = '--mini'
@@ -22,12 +24,15 @@ const restartWithFlags =
 fixCursorSize()
 
 const smokeDir = smokeTestDir(process.argv)
+const dumpFile = tissDumpFile(process.argv)
 
 if (restartWithFlags) {
   app.relaunch({ args: [...process.argv.slice(1), ...displayArgs()] })
   app.exit(0)
 } else if (smokeDir) {
   void runSmokeTest(smokeDir)
+} else if (dumpFile) {
+  void dumpTiss(dumpFile)
 } else if (!app.requestSingleInstanceLock()) {
   // Already running: the first instance gets our arguments via 'second-instance'.
   app.quit()
@@ -48,6 +53,7 @@ async function start(): Promise<void> {
   createTray(trayHost)
   createMiniWindow()
   setOnMainClosed(() => void onMainClosed())
+  startCalendarSync(() => broadcast(IPC.calendarChanged))
 
   const autostarted = process.argv.includes(AUTOSTART_ARG)
   if (process.argv.includes(MINI_ARG)) toggleMini()

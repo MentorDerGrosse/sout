@@ -25,8 +25,8 @@ export function parseTissToken(input: string): string | null {
   return /^[^\s?&#/]{8,}$/.test(text) ? text : null
 }
 
-/** Downloads the feed once and counts its events – a token check until the calendar itself exists. */
-export async function testTissFeed(token: string): Promise<{ events: number }> {
+/** Downloads the raw iCal feed. */
+export async function fetchTissFeed(token: string): Promise<string> {
   let response: Response
   try {
     response = await net.fetch(tissCalendarUrl(token), { signal: AbortSignal.timeout(15_000) })
@@ -36,5 +36,11 @@ export async function testTissFeed(token: string): Promise<{ events: number }> {
   if (!response.ok) throw new Error(`TISS antwortet mit HTTP ${response.status} – stimmt der Token?`)
   const body = await response.text()
   if (!body.includes('BEGIN:VCALENDAR')) throw new Error('Die Antwort ist kein Kalender – stimmt der Token?')
+  return body
+}
+
+/** Downloads the feed once and counts its events – the "Verbindung testen" button. */
+export async function testTissFeed(token: string): Promise<{ events: number }> {
+  const body = await fetchTissFeed(token)
   return { events: body.match(/^BEGIN:VEVENT/gm)?.length ?? 0 }
 }

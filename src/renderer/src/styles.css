@@ -751,3 +751,432 @@ p {
 .mini-footer .button {
   flex: 1;
 }
+
+/* ---------- Event lists (Heute, mini window) ---------- */
+
+.event-list {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.event-day-label {
+  margin-bottom: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.event-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+}
+
+.event-bar {
+  flex: none;
+  align-self: stretch;
+  width: 4px;
+  border-radius: 2px;
+}
+
+.event-time {
+  flex: none;
+  min-width: 44px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.event-time-end {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.event-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.event-title,
+.event-room {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-room {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.event-soon {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.event-soon.now {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.event-list.compact .event-row {
+  padding: 3px 0;
+}
+
+.event-list.compact .event-time {
+  min-width: 38px;
+}
+
+.holiday-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  color: var(--ok);
+  font-weight: 600;
+}
+
+/* ---------- Calendar page ---------- */
+
+.content-full {
+  display: flex;
+  overflow: hidden;
+  padding: 24px 28px;
+}
+
+.calendar-page {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.calendar-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.calendar-header h1 {
+  margin: 0;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+}
+
+.calendar-header p {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.calendar-header p.sync-error {
+  color: var(--danger);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.filters-divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--border);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chip:hover {
+  background: var(--surface-muted);
+}
+
+.chip.off {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+.chip-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.calendar-shell {
+  flex: 1;
+  min-height: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.fc {
+  --fc-border-color: var(--border);
+  --fc-page-bg-color: var(--surface);
+  --fc-neutral-bg-color: var(--surface-muted);
+  --fc-neutral-text-color: var(--text-muted);
+  --fc-today-bg-color: var(--accent-soft);
+  --fc-now-indicator-color: var(--danger);
+  --fc-list-event-hover-bg-color: var(--surface-muted);
+  --fc-button-bg-color: var(--surface-muted);
+  --fc-button-border-color: var(--border);
+  --fc-button-text-color: var(--text);
+  --fc-button-hover-bg-color: var(--border);
+  --fc-button-hover-border-color: var(--border);
+  --fc-button-active-bg-color: var(--button);
+  --fc-button-active-border-color: var(--button);
+  font-size: 13px;
+}
+
+.fc .fc-toolbar-title {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.fc .fc-button {
+  padding: 4px 10px;
+  font-size: 13px;
+  box-shadow: none !important;
+}
+
+.fc .fc-button-primary:not(:disabled).fc-button-active {
+  color: #fff;
+}
+
+.fc .fc-col-header-cell-cushion,
+.fc .fc-daygrid-day-number,
+.fc .fc-list-day-text,
+.fc .fc-list-day-side-text {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.fc a {
+  color: inherit;
+}
+
+.fc .fc-event {
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.fc .kind-holiday {
+  opacity: 0.75;
+}
+
+.cal-event {
+  overflow: hidden;
+  padding: 1px 3px;
+  line-height: 1.3;
+}
+
+.cal-event-title {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-event-sub {
+  overflow: hidden;
+  font-size: 11.5px;
+  opacity: 0.9;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fc-list .cal-event,
+.fc-list .cal-event-sub {
+  color: var(--text);
+}
+
+.event-details {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 320px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-top: 4px solid;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+}
+
+.event-details-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.event-kind {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.event-details h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.event-course {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.event-details .info-list {
+  grid-template-columns: 50px 1fr;
+}
+
+.event-details a:not(.button) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent);
+}
+
+.event-details .button {
+  align-self: flex-start;
+  text-decoration: none;
+}
+
+/* ---------- Settings: courses ---------- */
+
+.section-hint {
+  margin: 8px 4px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.course-row .row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.course-name {
+  max-width: 320px;
+  height: 30px;
+  font-weight: 600;
+}
+
+.color-input {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+}
+
+.color-input::-webkit-color-swatch-wrapper {
+  padding: 3px;
+}
+
+.color-input::-webkit-color-swatch {
+  border: 0;
+  border-radius: 5px;
+}
+
+/* ---------- Fixes after the first calendar screenshots ---------- */
+
+/* The mini window's appointment list scrolls; header and buttons always stay visible. */
+.mini-grow {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.mini-footer {
+  flex: none;
+}
+
+/* Let the time axis grow so "ganztägig" isn't cut off. */
+.fc .fc-timegrid-axis-cushion {
+  max-width: none;
+}
+
+.chip-label {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.other-room {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.cal-event-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  padding: 0 2px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.cal-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.cal-event-time {
+  flex: none;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cal-event-line .cal-event-title {
+  font-weight: 500;
+}
+
+.room-address {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 12px;
+}

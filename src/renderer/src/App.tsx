@@ -3,6 +3,7 @@ import { CalendarDays, ClipboardList, NotebookPen, Settings, Sun, type LucideIco
 import type { View } from '../../shared/types'
 import { Logo } from './components'
 import { currentSemester } from './lib/dates'
+import CalendarView from './views/CalendarView'
 import SettingsView from './views/SettingsView'
 import Today from './views/Today'
 import Upcoming from './views/Upcoming'
@@ -38,17 +39,23 @@ export default function App({ initialView }: { initialView: View }) {
           <NavItem view="settings" label="Einstellungen" icon={Settings} active={view === 'settings'} onSelect={setView} />
         </div>
       </aside>
-      <main className="content">
-        <div className="page">
-          {view === 'today' ? (
-            <Today onNavigate={setView} />
-          ) : view === 'settings' ? (
-            <SettingsView />
-          ) : (
-            <Upcoming view={view} />
-          )}
-        </div>
-      </main>
+      {view === 'calendar' ? (
+        <main className="content content-full">
+          <CalendarView onNavigate={setView} />
+        </main>
+      ) : (
+        <main className="content">
+          <div className="page">
+            {view === 'today' ? (
+              <Today onNavigate={setView} />
+            ) : view === 'settings' ? (
+              <SettingsView />
+            ) : (
+              <Upcoming view={view} />
+            )}
+          </div>
+        </main>
+      )}
     </div>
   )
 }
