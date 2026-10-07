@@ -1,4 +1,5 @@
-import { CalendarDays, ClipboardList, Maximize2, Settings } from 'lucide-react'
+import { useState, type FormEvent } from 'react'
+import { CalendarDays, Check, ClipboardList, Maximize2, NotebookPen, Settings } from 'lucide-react'
 import { EventList } from './EventList'
 import { TaskList } from './TaskList'
 import { nextUp, useTasks } from './lib/tasks'
@@ -63,6 +64,8 @@ export default function Mini() {
         )}
       </section>
 
+      <QuickNote ready={state ? Boolean(state.settings.notesDir) : null} />
+
       <footer className="mini-footer">
         <button type="button" className="button" onClick={() => window.sout.openMain()}>
           sout öffnen
@@ -72,5 +75,74 @@ export default function Mini() {
         </button>
       </footer>
     </div>
+  )
+}
+
+/** A thought, a question, a to-do – straight into the notes' Inbox. Enter saves, Shift+Enter starts a new line. */
+function QuickNote({ ready }: { ready: boolean | null }) {
+  const [text, setText] = useState('')
+  const [saved, setSaved] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  if (ready === false) {
+    return (
+      <section className="mini-section">
+        <h3>
+          <NotebookPen size={13} /> Schnellnotiz
+        </h3>
+        <p className="mini-empty">
+          <button type="button" className="link" onClick={() => window.sout.openMain('notes')}>
+            Notizen einrichten
+          </button>
+        </p>
+      </section>
+    )
+  }
+
+  const submit = async (event?: FormEvent): Promise<void> => {
+    event?.preventDefault()
+    if (!text.trim()) return
+    const result = await window.sout.quickNote(text)
+    if (!result.ok) {
+      setError(result.error)
+      return
+    }
+    setText('')
+    setError(null)
+    setSaved(result.value)
+    setTimeout(() => setSaved(null), 4000)
+  }
+
+  return (
+    <section className="mini-section">
+      <h3>
+        <NotebookPen size={13} /> Schnellnotiz
+      </h3>
+      <form className="quick-note" onSubmit={(event) => void submit(event)}>
+        <textarea
+          className="input"
+          rows={2}
+          value={text}
+          placeholder="Gedanke, Frage, To-do … (Enter speichert)"
+          aria-label="Schnellnotiz"
+          onChange={(event) => setText(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault()
+              void submit()
+            }
+          }}
+        />
+      </form>
+      {saved && (
+        <p className="quick-note-saved">
+          <Check size={13} /> In der Inbox gespeichert ·{' '}
+          <button type="button" className="link" onClick={() => window.sout.openMain('notes', saved)}>
+            öffnen
+          </button>
+        </p>
+      )}
+      {error && <p className="quick-note-error">{error}</p>}
+    </section>
   )
 }

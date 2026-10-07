@@ -1,4 +1,5 @@
 import { app, BrowserWindow, Notification, nativeTheme, screen, shell } from 'electron'
+import { fileURLToPath } from 'node:url'
 import { IPC, type View } from '../shared/types'
 import { preloadPath, rendererHtml, resourcePath } from './paths'
 import { getSettings, updateSettings } from './settings'
@@ -27,28 +28,38 @@ function backgroundColor(): string {
   return nativeTheme.shouldUseDarkColors ? '#1b1c1f' : '#f5f6f8'
 }
 
+/** The URL hash tells the page which window it is and what to show: "mini", "calendar", "notes:<note path>". */
 function load(win: BrowserWindow, hash: string): void {
   const devServer = process.env['ELECTRON_RENDERER_URL']
   if (!app.isPackaged && devServer) void win.loadURL(`${devServer}#${hash}`)
   else void win.loadFile(rendererHtml(), { hash })
 }
 
+/** Only sout's own page – not, say, a file dropped onto the window. */
 function isAppUrl(url: string): boolean {
   const devServer = process.env['ELECTRON_RENDERER_URL']
-  return url.startsWith('file://') || (devServer !== undefined && url.startsWith(devServer))
+  if (!app.isPackaged && devServer) return url.startsWith(devServer)
+  try {
+    return url.startsWith('file:') && fileURLToPath(url.split('#')[0]!) === rendererHtml()
+  } catch {
+    return false
+  }
 }
+
+/** Web and mail links go to the browser or mail program. */
+const isExternal = (url: string): boolean => /^(https?|mailto):/i.test(url)
 
 /** Shared by both windows: links open in the browser, keyboard shortcuts. */
 function setUpWebContents(win: BrowserWindow): void {
   const contents = win.webContents
   contents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https://')) void shell.openExternal(url)
+    if (isExternal(url)) void shell.openExternal(url)
     return { action: 'deny' }
   })
   contents.on('will-navigate', (event) => {
     if (isAppUrl(event.url)) return
     event.preventDefault()
-    if (event.url.startsWith('https://')) void shell.openExternal(event.url)
+    if (isExternal(event.url)) void shell.openExternal(event.url)
   })
   contents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return
@@ -67,7 +78,7 @@ function setUpWebContents(win: BrowserWindow): void {
   })
 }
 
-export function createMainWindow(view: View, show = true): BrowserWindow {
+export function createMainWindow(view: View, show = true, note?: string): BrowserWindow {
   const win = new BrowserWindow({
     width: 1100,
     height: 720,
@@ -77,7 +88,8 @@ export function createMainWindow(view: View, show = true): BrowserWindow {
     title: 'sout',
     icon: resourcePath('icon.png'),
     backgroundColor: backgroundColor(),
-    webPreferences: { preload: preloadPath(), sandbox: true, contextIsolation: true }
+    // plugins: Chromium's PDF viewer, for slides next to a note.
+    webPreferences: { preload: preloadPath(), sandbox: true, contextIsolation: true, plugins: true }
   })
   if (show) win.once('ready-to-show', () => win.show())
   // Closing destroys the window to free memory; the app itself keeps running in the tray.
@@ -86,17 +98,17 @@ export function createMainWindow(view: View, show = true): BrowserWindow {
     if (!quitting) onMainClosed?.()
   })
   setUpWebContents(win)
-  load(win, view)
+  load(win, note ? `${view}:${encodeURIComponent(note)}` : view)
   mainWindow = win
   return win
 }
 
-export function showMain(view?: View): void {
+export function showMain(view?: View, note?: string): void {
   if (!mainWindow) {
-    createMainWindow(view ?? 'today')
+    createMainWindow(view ?? 'today', true, note)
     return
   }
-  if (view) mainWindow.webContents.send(IPC.navigate, view)
+  if (view) mainWindow.webContents.send(IPC.navigate, view, note)
   if (mainWindow.isMinimized()) mainWindow.restore()
   mainWindow.show()
   mainWindow.focus()

@@ -7,7 +7,8 @@ const DEFAULTS: Settings = {
   startHiddenOnAutostart: true,
   closeHintShown: false,
   reminders: [1440, 180],
-  notifyOpening: true
+  notifyOpening: true,
+  notesDir: ''
 }
 
 let current: Settings | null = null

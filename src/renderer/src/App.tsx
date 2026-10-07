@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { CalendarDays, ClipboardList, NotebookPen, Settings, Sun, type LucideIcon } from 'lucide-react'
 import type { View } from '../../shared/types'
 import { Logo } from './components'
@@ -6,8 +6,11 @@ import { currentSemester } from './lib/dates'
 import CalendarView from './views/CalendarView'
 import DeadlinesView from './views/DeadlinesView'
 import SettingsView from './views/SettingsView'
+import type { NoteRequest } from './views/NotesView'
 import Today from './views/Today'
-import Upcoming from './views/Upcoming'
+
+// Editor, formulas and code highlighting are big; they load when the notes are opened first.
+const NotesView = lazy(() => import('./views/NotesView'))
 
 const NAV: { view: View; label: string; icon: LucideIcon }[] = [
   { view: 'today', label: 'Heute', icon: Sun },
@@ -16,10 +19,27 @@ const NAV: { view: View; label: string; icon: LucideIcon }[] = [
   { view: 'notes', label: 'Notizen', icon: NotebookPen }
 ]
 
-export default function App({ initialView }: { initialView: View }) {
+export default function App({ initialView, initialNote }: { initialView: View; initialNote?: string }) {
   const [view, setView] = useState<View>(initialView)
-  // The tray menu and the mini window can ask for a specific view.
-  useEffect(() => window.sout.onNavigate(setView), [])
+  const [noteRequest, setNoteRequest] = useState<NoteRequest | null>(initialNote ? { path: initialNote, id: 0 } : null)
+  // Once opened, the notes stay mounted: switching views keeps cursor, undo and the PDF next to it.
+  const [notesOpened, setNotesOpened] = useState(view === 'notes')
+  if (view === 'notes' && !notesOpened) setNotesOpened(true)
+
+  const openNote = useCallback((path: string, fresh?: boolean) => {
+    setNoteRequest({ path, fresh, id: Date.now() })
+    setView('notes')
+  }, [])
+
+  // The tray menu and the mini window can ask for a specific view (and note).
+  useEffect(
+    () =>
+      window.sout.onNavigate((next, note) => {
+        if (note) openNote(note)
+        else setView(next)
+      }),
+    [openNote]
+  )
 
   return (
     <div className="app">
@@ -40,24 +60,31 @@ export default function App({ initialView }: { initialView: View }) {
           <NavItem view="settings" label="Einstellungen" icon={Settings} active={view === 'settings'} onSelect={setView} />
         </div>
       </aside>
+      {notesOpened && (
+        <main className="content content-notes" hidden={view !== 'notes'}>
+          <Suspense fallback={null}>
+            <NotesView request={noteRequest} active={view === 'notes'} onNavigate={setView} />
+          </Suspense>
+        </main>
+      )}
       {view === 'calendar' ? (
         <main className="content content-full">
-          <CalendarView onNavigate={setView} />
+          <CalendarView onNavigate={setView} onOpenNote={openNote} />
         </main>
       ) : (
-        <main className="content">
-          <div className="page">
-            {view === 'today' ? (
-              <Today onNavigate={setView} />
-            ) : view === 'settings' ? (
-              <SettingsView />
-            ) : view === 'deadlines' ? (
-              <DeadlinesView />
-            ) : (
-              <Upcoming view={view} />
-            )}
-          </div>
-        </main>
+        view !== 'notes' && (
+          <main className="content">
+            <div className="page">
+              {view === 'today' ? (
+                <Today onNavigate={setView} />
+              ) : view === 'settings' ? (
+                <SettingsView />
+              ) : (
+                <DeadlinesView onOpenNote={openNote} onNavigate={setView} />
+              )}
+            </div>
+          </main>
+        )
       )}
     </div>
   )

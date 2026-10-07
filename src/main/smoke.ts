@@ -1,10 +1,13 @@
-import { app, BrowserWindow, Menu, nativeTheme, screen } from 'electron'
-import { cpSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { app, BrowserWindow, Menu, nativeTheme, net, screen } from 'electron'
+import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { IPC, type View } from '../shared/types'
 import { autostartEntry } from './autostart'
-import { startCalendarSync, syncCalendar } from './calendar'
-import { startTasksSync, syncTasks } from './tasks'
+import { calendarData, startCalendarSync, syncCalendar } from './calendar'
+import { importPdfs, noteForEvent, noteForTask, quickNote, setupNotes } from './courseNotes'
+import { notesData, searchNotes, startNotesWatch, writeNote } from './notes'
+import { handleNotesScheme } from './notesProtocol'
+import { startTasksSync, syncTasks, tasksData } from './tasks'
 import { readJson } from './jsonFile'
 import { TuwelError, tuwelCall } from './tuwelApi'
 import { lastLoginTrace, trySilent } from './tuwelLogin'
@@ -41,7 +44,7 @@ export async function runSmokeTest(dir: string): Promise<void> {
   setTimeout(() => {
     report['error'] = 'timeout'
     finish(1)
-  }, 30_000)
+  }, 60_000)
 
   app.on('child-process-gone', (_e, details) => messages.push(`[child-gone] ${details.type}: ${details.reason} (${details.exitCode})`))
   app.on('browser-window-created', (_e, win) => {
@@ -63,6 +66,8 @@ export async function runSmokeTest(dir: string): Promise<void> {
     report['gpu'] = app.getGPUFeatureStatus()
     Menu.setApplicationMenu(null)
     registerIpc()
+    handleNotesScheme()
+    startNotesWatch(() => broadcast(IPC.notesChanged))
     startCalendarSync(() => broadcast(IPC.calendarChanged))
     startTasksSync(() => broadcast(IPC.tasksChanged))
     await Promise.all([syncCalendar(), syncTasks()])
@@ -101,7 +106,9 @@ export async function runSmokeTest(dir: string): Promise<void> {
     screenshots['deadlines-later'] = await screenshot(main, dir, 'deadlines-later')
     await main.webContents.executeJavaScript('document.querySelector(".content").scrollTo(0, 0)')
     await click('.task-card:nth-of-type(1) .task-body')
-    await main.webContents.executeJavaScript(`[...document.querySelectorAll('.task-body')].find((b) => b.textContent.includes('Übungsblatt'))?.click()`)
+    await main.webContents.executeJavaScript(
+      `[...document.querySelectorAll('.task-body')].find((b) => b.textContent.includes('Übungsblatt') && b.getAttribute('aria-expanded') !== 'true')?.click()`
+    )
     await click('.header-actions .button:last-child')
     // Clicks done through executeJavaScript take a moment to show up in a hidden window.
     await delay(1500)
@@ -114,6 +121,7 @@ export async function runSmokeTest(dir: string): Promise<void> {
     await main.webContents.executeJavaScript('document.querySelector(".content").scrollTo(0, 1e6)')
     await delay(300)
     screenshots['settings-bottom'] = await screenshot(main, dir, 'settings-bottom')
+    Object.assign(screenshots, await smokeNotes(main, mini, dir, report))
     report['screenshots'] = screenshots
 
     const display = screen.getPrimaryDisplay()
@@ -126,6 +134,169 @@ export async function runSmokeTest(dir: string): Promise<void> {
     report['error'] = error instanceof Error ? error.stack : String(error)
     finish(1)
   }
+}
+
+const SAMPLE_NOTE = `# Vorlesung
+
+**Beispielkunde** · Beispielraum
+
+## Notizen
+
+Satz des Pythagoras: $a^2 + b^2 = c^2$ – kommt zur #prüfung.
+
+$$
+\\int_0^1 x^2 \\, dx = \\frac{1}{3}
+$$
+
+- [x] Folien durchgehen
+- [ ] Beispiel 3 nachrechnen
+
+| n | n² |
+|---|----|
+| 1 | 1  |
+| 2 | 4  |
+
+\`\`\`python
+def quadrat(n):
+    return n * n  # nur ein Beispiel
+\`\`\`
+
+## Offene Fragen
+
+- Warum konvergiert die Reihe?
+`
+
+/** Notes: setup page, a lecture note with formulas, the PDF next to it, search, new-note dialog, quick note. */
+async function smokeNotes(main: BrowserWindow, mini: BrowserWindow, dir: string, report: Record<string, unknown>): Promise<Record<string, string>> {
+  const shots: Record<string, string> = {}
+  const js = (code: string): Promise<unknown> => main.webContents.executeJavaScript(code)
+  /** Sets an input or select the way typing would, so React notices. */
+  const setValue = (selector: string, value: string): Promise<unknown> =>
+    js(`(() => {
+      const el = document.querySelector(${JSON.stringify(selector)})
+      if (!el) return false
+      const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype
+      Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, ${JSON.stringify(value)})
+      el.dispatchEvent(new Event(el instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true }))
+      return true
+    })()`)
+  const clickButton = (selector: string, title: string): Promise<unknown> =>
+    js(`[...document.querySelectorAll(${JSON.stringify(selector)})].find((b) => b.title === ${JSON.stringify(title)})?.click()`)
+
+  main.webContents.send(IPC.navigate, 'notes')
+  await delay(2000)
+  shots['notes-setup'] = await screenshot(main, dir, 'notes-setup')
+
+  const setup = setupNotes(join(dir, 'Studium'))
+  const lecture = calendarData().events.find((event) => event.id === '123.456-now') ?? calendarData().events.find((event) => event.kind === 'course')
+  const lecturePath = lecture ? noteForEvent(lecture.id) : null
+  if (lecturePath) writeNote(lecturePath, SAMPLE_NOTE, null)
+  const pdfSource = join(dir, 'Folien-Beispiel.pdf')
+  writeFileSync(pdfSource, await samplePdf())
+  const [pdfPath] = await importPdfs(lecture?.courseKey ?? null, [pdfSource], null)
+  const task = tasksData().tasks[0]
+  const status = async (url: string): Promise<number | string> => {
+    try {
+      return (await net.fetch(url)).status
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error)
+    }
+  }
+  report['notes'] = {
+    root: setup.root,
+    files: readdirSync(setup.root!, { recursive: true }).map(String).sort(),
+    lecturePath,
+    pdfPath,
+    quickNote: quickNote('Frage an die Tutorin: Beispiel 3 #frage'),
+    taskNote: task ? noteForTask(task.id) : null,
+    search: searchNotes('pythagoras'),
+    tagSearch: searchNotes('#prüfung'),
+    tags: notesData().tags,
+    protocol: {
+      pdf: pdfPath ? await status(`sout-file://notes/${pdfPath.split('/').map(encodeURIComponent).join('/')}`) : null,
+      outside: await status('sout-file://notes/..%2F..%2Fetc%2Fhostname')
+    }
+  }
+
+  if (lecturePath) main.webContents.send(IPC.navigate, 'notes', lecturePath)
+  await delay(2000)
+  shots['notes'] = await screenshot(main, dir, 'notes')
+  await clickButton('.segmented button', 'Lesen')
+  await delay(1500)
+  shots['notes-preview'] = await screenshot(main, dir, 'notes-preview')
+  await clickButton('.segmented button', 'Geteilt')
+  if (pdfPath) await setValue('.slides-select select', pdfPath)
+  await delay(3000)
+  shots['notes-pdf'] = await screenshot(main, dir, 'notes-pdf')
+  await setValue('.search-field input', 'pythagoras')
+  await delay(1500)
+  shots['notes-search'] = await screenshot(main, dir, 'notes-search')
+  await setValue('.search-field input', '')
+  await js(`document.querySelector('.notes-sidebar-head > .icon-button')?.click()`)
+  await delay(1500)
+  shots['notes-new'] = await screenshot(main, dir, 'notes-new')
+  await js(`document.querySelector('.modal-head .icon-button')?.click()`)
+  shots['mini-notes'] = await screenshot(mini, dir, 'mini-notes')
+  // The assignment card, now with its notes button.
+  main.webContents.send(IPC.navigate, 'deadlines')
+  await delay(500)
+  await js(`[...document.querySelectorAll('.task-body')].find((b) => b.getAttribute('aria-expanded') !== 'true')?.click()`)
+  await delay(1500)
+  shots['deadlines-note'] = await screenshot(main, dir, 'deadlines-note')
+  if (lecturePath) (report['notes'] as Record<string, unknown>)['editing'] = await smokeEditing(main, join(setup.root!, lecturePath), lecturePath)
+  return shots
+}
+
+/** Typing saves by itself, changes from outside show up, conflicts are caught, closing the window saves. Closes the main window. */
+async function smokeEditing(main: BrowserWindow, file: string, path: string): Promise<Record<string, boolean>> {
+  const js = (code: string): Promise<unknown> => main.webContents.executeJavaScript(code)
+  const onDisk = (): string => readFileSync(file, 'utf8')
+  const type = async (text: string): Promise<void> => {
+    await js(`(() => {
+      const el = document.querySelector('.cm-content')
+      el.focus()
+      const selection = window.getSelection()
+      selection.selectAllChildren(el)
+      selection.collapseToEnd()
+    })()`)
+    await main.webContents.insertText(text)
+  }
+  const result: Record<string, boolean> = {}
+  main.webContents.send(IPC.navigate, 'notes', path)
+  await delay(1000)
+
+  await type(' Autosave-Test')
+  await delay(1500)
+  result['autosaved'] = onDisk().includes('Autosave-Test')
+
+  writeFileSync(file, `${onDisk()}\nVon außen geändert\n`)
+  await delay(1500)
+  result['followsOutsideChange'] = ((await js(`document.querySelector('.cm-content').innerText`)) as string).includes('Von außen geändert')
+
+  await type(' Tippen')
+  writeFileSync(file, `${onDisk()}\nNochmal von außen\n`)
+  await delay(1500)
+  result['conflictShown'] = (await js(`document.body.innerText.includes('außerhalb von sout geändert')`)) as boolean
+  result['conflictKeptOutsideVersion'] = onDisk().includes('Nochmal von außen') && !onDisk().includes('Tippen')
+  await js(`[...document.querySelectorAll('button')].find((b) => b.textContent.includes('Meine Fassung speichern'))?.click()`)
+  await delay(1000)
+  result['keepMineSaved'] = onDisk().includes('Tippen')
+
+  await type(' Beim-Schliessen')
+  main.close()
+  await delay(1000)
+  result['savedOnClose'] = onDisk().includes('Beim-Schliessen')
+  return result
+}
+
+/** A one-page PDF made from a little HTML page – stands in for lecture slides. */
+async function samplePdf(): Promise<Buffer> {
+  const win = new BrowserWindow({ show: false, width: 1000, height: 700 })
+  const html = '<body style="font-family:sans-serif;padding:40px"><h1>Folie 1: Beispielkunde</h1><p>Satz des Pythagoras: a² + b² = c²</p></body>'
+  await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
+  const pdf = await win.webContents.printToPDF({ landscape: true })
+  win.destroy()
+  return pdf
 }
 
 function loaded(win: BrowserWindow): Promise<void> {

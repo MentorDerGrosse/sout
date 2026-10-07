@@ -18,6 +18,8 @@ export interface Settings {
   reminders: number[]
   /** Notify when an assignment or test opens. */
   notifyOpening: boolean
+  /** Folder with the notes; empty until it has been set up in the notes view. */
+  notesDir: string
 }
 
 /** Reminder times offered in the settings: minutes before a deadline → label. */
@@ -161,6 +163,56 @@ export interface TodoInput {
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string }
 
+/** Files in the notes folder are served to the UI as sout-file://notes/<path> (PDF viewer, images). */
+export const NOTE_FILE_SCHEME = 'sout-file'
+
+/** A file or folder in the notes folder. Paths are relative to it, separated by '/'. */
+export type NoteNode =
+  | { kind: 'dir'; path: string; name: string; children: NoteNode[] }
+  | { kind: 'note' | 'pdf' | 'file'; path: string; name: string; modified: number }
+
+export interface NotesData {
+  /** The notes folder; null until it has been set up. */
+  root: string | null
+  /** Proposed when setting up. */
+  suggestedRoot: string
+  /** Set up, but the folder is gone (deleted, drive not mounted). */
+  missing: boolean
+  /** Current semester, e.g. "2026W"; its course folders are shown first. */
+  semester: string
+  tree: NoteNode[]
+  tags: { tag: string; count: number }[]
+}
+
+export interface NoteDoc {
+  path: string
+  content: string
+  /** mtime when read; saving checks it to not overwrite changes made outside of sout. */
+  modified: number
+}
+
+export type SaveResult = { ok: true; modified: number } | { ok: false; conflict: boolean; error: string }
+
+export type NoteTemplate = 'lecture' | 'exercise' | 'summary' | 'blank'
+
+export interface NewNote {
+  /** LVA number; null puts the note into the Inbox. */
+  courseKey: string | null
+  template: NoteTemplate
+  title: string
+  /** Day of the lecture (YYYY-MM-DD), for the lecture template. */
+  date?: string
+}
+
+export interface SearchHit {
+  path: string
+  /** First matching line (1-based) and its text. */
+  line: number
+  snippet: string
+  /** How often the search words occur. */
+  count: number
+}
+
 export interface SoutApi {
   getInfo(): Promise<AppInfo>
   getSettings(): Promise<Settings>
@@ -187,9 +239,39 @@ export interface SoutApi {
   setTaskDone(id: string, done: boolean): Promise<TasksData>
   deleteTodo(id: string): Promise<TasksData>
   onTasksChanged(listener: () => void): () => void
-  openMain(view?: View): void
+  getNotes(): Promise<NotesData>
+  /** Creates the notes folder (null: the suggested one) with Inbox and course folders. */
+  setupNotes(dir: string | null): Promise<Result<NotesData>>
+  /** Folder picker; returns the chosen folder without using it yet. */
+  chooseNotesDir(): Promise<string | null>
+  readNote(path: string): Promise<Result<NoteDoc>>
+  /** `baseModified` from readNote/writeNote: refuses to overwrite changes made outside of sout. */
+  writeNote(path: string, content: string, baseModified: number | null): Promise<SaveResult>
+  /** Last save when the window closes – synchronous, so it finishes before the page is gone. */
+  flushNote(path: string, content: string, baseModified: number | null): boolean
+  createNote(input: NewNote): Promise<Result<string>>
+  /** The note for a calendar event (lecture notes and the like) – opened or created. */
+  noteForEvent(eventId: string): Promise<Result<string>>
+  /** The note for an assignment – opened or created. */
+  noteForTask(taskId: string): Promise<Result<string>>
+  /** Saves a quick note into the Inbox. */
+  quickNote(text: string): Promise<Result<string>>
+  renameNote(path: string, name: string): Promise<Result<string>>
+  /** Into a course folder, or with null into the Inbox. */
+  moveNote(path: string, courseKey: string | null): Promise<Result<string>>
+  trashNote(path: string): Promise<Result<null>>
+  /** Copies PDFs into the course's Folien folder (Inbox without course); without files a picker opens. */
+  importPdfs(courseKey: string | null, files?: string[]): Promise<Result<string[]>>
+  /** Shows the file (or with null the notes folder) in the file manager. */
+  showNoteInFolder(path: string | null): void
+  searchNotes(query: string): Promise<SearchHit[]>
+  onNotesChanged(listener: () => void): () => void
+  /** Path of a file dropped onto the window. */
+  filePath(file: File): string
+  openMain(view?: View, note?: string): void
   hideMini(): void
-  onNavigate(listener: (view: View) => void): () => void
+  /** Switch the main window to a view; `note` opens that note in the notes view. */
+  onNavigate(listener: (view: View, note?: string) => void): () => void
   /** Settings, autostart or tokens changed, possibly from the tray menu or the other window. */
   onStateChanged(listener: () => void): () => void
 }
@@ -216,6 +298,23 @@ export const IPC = {
   setTaskDone: 'sout:set-task-done',
   deleteTodo: 'sout:delete-todo',
   tasksChanged: 'sout:tasks-changed',
+  getNotes: 'sout:get-notes',
+  setupNotes: 'sout:setup-notes',
+  chooseNotesDir: 'sout:choose-notes-dir',
+  readNote: 'sout:read-note',
+  writeNote: 'sout:write-note',
+  flushNote: 'sout:flush-note',
+  createNote: 'sout:create-note',
+  noteForEvent: 'sout:note-for-event',
+  noteForTask: 'sout:note-for-task',
+  quickNote: 'sout:quick-note',
+  renameNote: 'sout:rename-note',
+  moveNote: 'sout:move-note',
+  trashNote: 'sout:trash-note',
+  importPdfs: 'sout:import-pdfs',
+  showNoteInFolder: 'sout:show-note-in-folder',
+  searchNotes: 'sout:search-notes',
+  notesChanged: 'sout:notes-changed',
   openMain: 'sout:open-main',
   hideMini: 'sout:hide-mini',
   navigate: 'sout:navigate',

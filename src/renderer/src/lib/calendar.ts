@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { CalendarData, CalendarEvent, Course, EventKind } from '../../../shared/types'
-import { currentSemester } from './dates'
+import { currentSemester, roomName, tissCourseUrl as courseUrl } from '../../../shared/tu'
 
 /** The cached TISS calendar; updates when a sync finishes or a course is changed. */
 export function useCalendar(): CalendarData | null {
@@ -58,10 +58,7 @@ export function isoDate(day: Date): string {
   return `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`
 }
 
-/** "GM 1 Audi. Max.- ARCH-INF" → "GM 1 Audi. Max." (TISS appends the building's short name). */
-export function roomName(location: string): string {
-  return location.replace(/\s*-\s*[A-Z][A-Z-]*$/, '').trim()
-}
+export { roomName }
 
 /** TUW-Maps link: exact room if it's in the room list, otherwise a search for its name. */
 export function mapsUrl(data: CalendarData, location: string): string {
@@ -70,7 +67,7 @@ export function mapsUrl(data: CalendarData, location: string): string {
 }
 
 export function tissCourseUrl(courseKey: string, date: Date): string {
-  return `https://tiss.tuwien.ac.at/course/courseDetails.xhtml?courseNr=${courseKey.replace('.', '')}&semester=${currentSemester(date).code}`
+  return courseUrl(courseKey, currentSemester(date).code)
 }
 
 const time = new Intl.DateTimeFormat('de-AT', { hour: '2-digit', minute: '2-digit' })

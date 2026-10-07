@@ -5,8 +5,10 @@ import timeGridPlugin from '@fullcalendar/timegrid'
 import listPlugin from '@fullcalendar/list'
 import deLocale from '@fullcalendar/core/locales/de'
 import type { EventContentArg, EventInput } from '@fullcalendar/core'
-import { CalendarDays, ExternalLink, MapPin, RefreshCw, X } from 'lucide-react'
+import { CalendarDays, ExternalLink, MapPin, NotebookPen, RefreshCw, X } from 'lucide-react'
+import { EVENT_NOTE_FOLDERS } from '../../../shared/notes'
 import type { CalendarData, CalendarEvent, EventKind, View } from '../../../shared/types'
+import { eventNotePath, useNotes } from '../lib/notes'
 import { openTasks, taskCourse, useTasks } from '../lib/tasks'
 import { Callout } from '../components'
 import {
@@ -34,7 +36,8 @@ const KIND_FILTERS: { kind: Filter; label: string }[] = [
   { kind: 'holiday', label: 'Ferien' }
 ]
 
-export default function CalendarView({ onNavigate }: { onNavigate: (view: View) => void }) {
+export default function CalendarView(props: { onNavigate: (view: View) => void; onOpenNote: (path: string, fresh?: boolean) => void }) {
+  const { onNavigate } = props
   const data = useCalendar()
   const tasks = useTasks()
   const [hiddenKinds, setHiddenKinds] = useState<Set<Filter>>(new Set())
@@ -182,7 +185,9 @@ export default function CalendarView({ onNavigate }: { onNavigate: (view: View) 
         />
       </div>
 
-      {selected && <EventDetails data={data} event={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <EventDetails data={data} event={selected} onClose={() => setSelected(null)} onNavigate={onNavigate} onOpenNote={props.onOpenNote} />
+      )}
     </div>
   )
 }
@@ -211,7 +216,14 @@ function renderEvent(arg: EventContentArg) {
 
 const longDay = new Intl.DateTimeFormat('de-AT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
-function EventDetails({ data, event, onClose }: { data: CalendarData; event: CalendarEvent; onClose: () => void }) {
+function EventDetails(props: {
+  data: CalendarData
+  event: CalendarEvent
+  onClose: () => void
+  onNavigate: (view: View) => void
+  onOpenNote: (path: string, fresh?: boolean) => void
+}) {
+  const { data, event, onClose } = props
   const course = event.courseKey ? courseMap(data).get(event.courseKey) : undefined
   const start = new Date(event.start)
   return (
@@ -261,11 +273,43 @@ function EventDetails({ data, event, onClose }: { data: CalendarData; event: Cal
         )}
       </dl>
       {course && (
-        <a className="button secondary small" href={tissCourseUrl(course.key, start)} target="_blank" rel="noreferrer">
-          <ExternalLink size={13} /> LVA in TISS
-        </a>
+        <div className="event-actions">
+          <NoteButton event={event} onNavigate={props.onNavigate} onOpenNote={props.onOpenNote} />
+          <a className="button secondary small" href={tissCourseUrl(course.key, start)} target="_blank" rel="noreferrer">
+            <ExternalLink size={13} /> LVA in TISS
+          </a>
+        </div>
       )}
       {!course && event.kind !== 'holiday' && <Callout kind="info" title={event.title} />}
     </aside>
+  )
+}
+
+/** Lecture notes for this appointment: opens them, or creates them from the template. */
+function NoteButton(props: { event: CalendarEvent; onNavigate: (view: View) => void; onOpenNote: (path: string, fresh?: boolean) => void }) {
+  const { notes } = useNotes()
+  const [error, setError] = useState<string | null>(null)
+  const { event } = props
+  if (!EVENT_NOTE_FOLDERS[event.kind]) return null
+  const existing = eventNotePath(notes, event)
+  const exam = event.kind === 'exam'
+  const label = existing ? (exam ? 'Prüfungsnotizen' : 'Mitschrift öffnen') : exam ? 'Prüfung vorbereiten' : 'Mitschrift anlegen'
+
+  const open = async (): Promise<void> => {
+    // Without a notes folder the notes page explains how to set it up.
+    if (!notes?.root) return props.onNavigate('notes')
+    if (existing) return props.onOpenNote(existing)
+    const result = await window.sout.noteForEvent(event.id)
+    if (result.ok) props.onOpenNote(result.value, true)
+    else setError(result.error)
+  }
+
+  return (
+    <>
+      <button type="button" className="button small" onClick={() => void open()}>
+        <NotebookPen size={13} /> {label}
+      </button>
+      {error && <Callout kind="error" title={error} />}
+    </>
   )
 }

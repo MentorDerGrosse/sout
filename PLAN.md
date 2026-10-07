@@ -24,7 +24,7 @@ Dazu:
 | Tray unter GNOME | Erweiterung „AppIndicator and KStatusNotifierItem Support“ (`gnome-shell-extension-appindicator`) |
 | Wayland | App läuft über XWayland, damit das Mini-Fenster oben rechts platziert werden kann. Der Schalter `--ozone-platform=x11` muss beim Start übergeben werden (npm-Skripte, `sout`-Befehl und Autostart tun das; sonst startet sout sich einmal selbst damit neu). Zur Laufzeit gesetzt erreicht er nur die Kindprozesse – dann bleiben die Fenster leer. |
 | Sprache | Electron startet mit `--lang=de-AT` – Datumsfelder und Menüs sind deutsch, auch wenn das System auf Englisch steht |
-| Notizen | Markdown-Dateien; LaTeX-Formeln wichtig; PDFs (Folien) wichtig; Screenshots niedrige Priorität; keine Handschrift |
+| Notizen | Markdown-Dateien in einem frei wählbaren Ordner (Vorschlag `~/Studium`), angelegt erst nach Klick auf „Ordner anlegen“; LaTeX-Formeln (KaTeX) und PDFs (Folien) wichtig; Screenshots niedrige Priorität; keine Handschrift |
 | Reihenfolge | egal, daher Phase 0 bis 4 wie unten; Windows & Mac (Phase 5) ganz zum Schluss |
 
 ## Datenquellen
@@ -57,7 +57,8 @@ Dazu:
   - `~/.config/sout/settings.json` – Einstellungen
   - `~/.config/sout/secrets.json` – Tokens, verschlüsselt mit Electrons `safeStorage` (Schlüssel im GNOME-Schlüsselbund)
   - `~/.config/autostart/sout.desktop` – nur wenn Autostart an ist
-  - später: SQLite als Zwischenspeicher für Termine und Abgaben, Notizen als Markdown-Dateien in einem Ordner (z. B. `~/Studium`)
+  - Termine und Abgaben als JSON zwischengespeichert (`calendar.json`, `tuwel.json`); SQLite war bisher nicht nötig
+  - Notizen: Markdown-Dateien im gewählten Notizordner, dazu `~/.config/sout/notes.json` (für welche Fächer schon ein Ordner angelegt wurde)
 - **Fach** = LVA-Nummer + Semester (z. B. `123.456-2026W`). Das verbindet TISS-Termine, TUWEL-Kurs und Notizordner.
 
 ## Phasen
@@ -88,7 +89,7 @@ Dazu:
 - [x] Termin-Details: Raum mit TUW-Maps-Link und Adresse (Raumliste aus better-tiss-calendar), Link zur LVA in TISS
 - [x] „Heute“ und Mini-Fenster zeigen die nächsten Termine, mit „in 25 min“ / „läuft“
 - [ ] Eigene Termine (Lerngruppe, Lernblöcke)
-- später: Link zum TUWEL-Kurs (kommt mit Phase 2), „Mitschrift öffnen“ (Phase 3), LectureTube-Link, Änderungen erkennen (Raumwechsel, Absage) und melden, Überschneidungen markieren
+- später: Link zum TUWEL-Kurs, LectureTube-Link, Änderungen erkennen (Raumwechsel, Absage) und melden, Überschneidungen markieren
 
 ### Phase 2 – Abgaben & Tests (TUWEL) ✅ (mit echtem Login noch zu prüfen)
 
@@ -107,29 +108,35 @@ Dazu:
 - [ ] Klären, warum nach dem manuellen Login erst die Erneuerung im Hintergrund den Token bekommt (Protokoll: `loginTrace` in `tuwel.json`)
 - später: Kreuzerlübungen genauer (was ist angekreuzt), Terminbuchungen für Abgabegespräche, Noten und Feedback, Forum-Ankündigungen, Meldung bei neuen Aufgaben, Raum bei Präsenztests aus TISS
 
-### Phase 3 – Notizen
+### Phase 3 – Notizen ✅ (im Alltag noch zu erproben)
 
-- [ ] Pro Fach ein Ordner, nach Semester geordnet (`~/Studium/2026W/<Fach> (<LVA-Nr>)/`); alte Semester ins Archiv
-- [ ] Markdown-Editor mit Live-Ansicht, LaTeX-Formeln (KaTeX), Code, Tabellen, Checklisten
-- [ ] PDFs: Folien pro Fach ablegen und neben der Notiz öffnen
-- [ ] Vorlagen: Vorlesungsmitschrift (Datum und Raum aus dem Kalender), Übungsblatt, Zusammenfassung zur Prüfungsvorbereitung
-- [ ] Verknüpfungen: Termin ↔ Mitschrift, Abgabe ↔ Notizen
-- [ ] Volltextsuche, Tags
-- [ ] Schnellnotiz aus dem Mini-Fenster → Inbox, später einem Fach zuordnen
-- später: Bilder per Strg+V, Links zwischen Notizen, TUWEL-Unterlagen automatisch laden, PDF-Export, Karteikarten
+- [x] Notizordner frei wählbar (Vorschlag `~/Studium`), eingerichtet erst nach Klick; änderbar in den Einstellungen
+- [x] Pro Fach ein Ordner, nach Semester geordnet (`2026W/<Fach> (<LVA-Nr>)/`), automatisch für jedes Fach aus dem TISS-Kalender – jeder nur einmal, ein gelöschter kommt nicht wieder; frühere Semester stehen in der Liste unter „Weitere Ordner“
+- [x] Markdown-Editor (CodeMirror 6) mit Live-Ansicht daneben, oder nur Schreiben / nur Lesen; LaTeX-Formeln (KaTeX), Code mit Hervorhebung, Tabellen, Checklisten (in der Ansicht abhakbar); Formatieren per Leiste und Tastenkürzel
+- [x] Speichert von selbst; beim Schließen des Fensters wird der letzte Stand noch gesichert
+- [x] Änderungen von außen (anderer Editor, Sync) erscheinen in sout; wurde gleichzeitig in sout geschrieben, fragt sout nach („Meine Fassung speichern“ / „Andere Fassung laden“) statt zu überschreiben
+- [x] PDFs: Folien pro Fach ablegen (Dialog oder ins Fenster ziehen) und neben der Notiz öffnen (Chromiums eingebaute PDF-Ansicht)
+- [x] Vorlagen: Vorlesungsmitschrift (Datum, Zeit und Raum aus dem Kalender), Übung, Zusammenfassung zur Prüfungsvorbereitung (mit dem nächsten Prüfungstermin), leer
+- [x] Verknüpfungen: Termin → „Mitschrift anlegen/öffnen“, Abgabe → „Notizen anlegen/öffnen“; eine laufende Vorlesung steht oben in der Notizliste
+- [x] Volltextsuche (auch über Dateinamen), Tags mit `#tag`
+- [x] Schnellnotiz aus dem Mini-Fenster → Inbox, später per „In Fach verschieben“ einordnen
+- [ ] Im Alltag ausprobieren: Ordner einrichten, eine Vorlesung mitschreiben, Folien daneben
+- später: Bilder per Strg+V, Links zwischen Notizen, TUWEL-Unterlagen automatisch laden, PDF-Export, Karteikarten, Rechtschreibprüfung (zurzeit aus, sonst wären Formeln rot unterstrichen)
 
 ```
-~/Studium/2026W/Analysis (123.456)/
-├── _fach.md        ← LVA-Infos & Links
-├── Vorlesung/2026-10-07.md
-├── Übung/
-├── Prüfung/
-└── Folien/         ← PDFs
+~/Studium/
+├── Inbox/                     ← Schnellnotizen
+└── 2026W/Analysis (123.456)/
+    ├── _fach.md               ← LVA-Infos & Links
+    ├── Vorlesung/2026-10-07.md
+    ├── Übung/
+    ├── Prüfung/
+    └── Folien/                ← PDFs
 ```
 
 ### Phase 4 – Feinschliff
 
-- [ ] Mini-Fenster als echte Tagesübersicht – nächste Termine mit Countdown und nächste Abgaben sind schon drin; fehlt: Schnellnotiz (mit Phase 3), kompakter Tagesplan
+- [ ] Mini-Fenster als echte Tagesübersicht – nächste Termine mit Countdown, nächste Abgaben und Schnellnotiz sind schon drin; fehlt: kompakter Tagesplan
 - [ ] Symbol zeigt Dringendes an (z. B. Punkt, wenn in weniger als 24 Stunden etwas fällig ist)
 - [ ] Meldungen bei Änderungen (Raum, Absage, neue Aufgabe, neue Note)
 - [ ] Installation als RPM oder AppImage

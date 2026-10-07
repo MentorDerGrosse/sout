@@ -1,7 +1,9 @@
-import { app, ipcMain } from 'electron'
-import { IPC, isView, type AppInfo, type CoursePatch, type Result, type TodoInput } from '../shared/types'
+import { app, BrowserWindow, ipcMain } from 'electron'
+import { IPC, isView, type AppInfo, type CoursePatch, type NewNote, type Result, type TodoInput } from '../shared/types'
 import { autostartFile, isAutostartEnabled, setAutostart } from './autostart'
 import { calendarData, clearCalendar, syncCalendar, updateCourse } from './calendar'
+import { chooseNotesDir, createNote, importPdfs, moveNote, noteForEvent, noteForTask, quickNote, setupNotes } from './courseNotes'
+import { flushNote, notesData, readNote, renameNote, searchNotes, showInFolder, trashNote, writeNote } from './notes'
 import { launcherPath } from './paths'
 import { clearSecret, getSecret, secretsStatus, setSecret } from './secrets'
 import { getSettings, updateSettings } from './settings'
@@ -16,6 +18,18 @@ const fail = (error: unknown): Result<never> => ({
   ok: false,
   error: error instanceof Error ? error.message : String(error)
 })
+
+async function attempt<T>(action: () => T | Promise<T>): Promise<Result<T>> {
+  try {
+    return ok(await action())
+  } catch (error) {
+    return fail(error)
+  }
+}
+
+const text = (value: unknown): string => (typeof value === 'string' ? value : '')
+const numberOrNull = (value: unknown): number | null => (typeof value === 'number' ? value : null)
+const stringOrNull = (value: unknown): string | null => (typeof value === 'string' ? value : null)
 
 /** Keep the tray menu and both windows in sync after a change. */
 function changed(): void {
@@ -41,7 +55,9 @@ export function registerIpc(): void {
   ipcMain.handle(IPC.getInfo, () => appInfo())
   ipcMain.handle(IPC.getSettings, () => getSettings())
   ipcMain.handle(IPC.updateSettings, (_event, patch: unknown) => {
-    const settings = updateSettings(patch)
+    // The notes folder only changes through setupNotes, which also creates it.
+    const allowed = patch && typeof patch === 'object' ? { ...patch, notesDir: undefined } : patch
+    const settings = updateSettings(allowed)
     changed()
     return settings
   })
@@ -132,9 +148,51 @@ export function registerIpc(): void {
     if (typeof id === 'string') deleteTodo(id)
     return tasksData()
   })
-  ipcMain.on(IPC.openMain, (_event, view: unknown) => {
+  registerNotesIpc()
+  ipcMain.on(IPC.openMain, (_event, view: unknown, note: unknown) => {
     hideMini()
-    showMain(isView(view) ? view : undefined)
+    showMain(isView(view) ? view : undefined, stringOrNull(note) ?? undefined)
   })
   ipcMain.on(IPC.hideMini, () => hideMini())
+}
+
+function registerNotesIpc(): void {
+  ipcMain.handle(IPC.getNotes, () => notesData())
+  ipcMain.handle(IPC.setupNotes, async (_event, dir: unknown) => {
+    const result = await attempt(() => setupNotes(stringOrNull(dir)))
+    // The notes folder is a setting: mini window and "Heute" show whether it is set up.
+    changed()
+    return result
+  })
+  ipcMain.handle(IPC.chooseNotesDir, (event) => chooseNotesDir(BrowserWindow.fromWebContents(event.sender)))
+  ipcMain.handle(IPC.readNote, (_event, path: unknown) => attempt(() => readNote(text(path))))
+  ipcMain.handle(IPC.writeNote, (_event, path: unknown, content: unknown, base: unknown) => writeNote(text(path), text(content), numberOrNull(base)))
+  ipcMain.on(IPC.flushNote, (event, path: unknown, content: unknown, base: unknown) => {
+    event.returnValue = typeof content === 'string' && flushNote(text(path), content, numberOrNull(base))
+  })
+  ipcMain.handle(IPC.createNote, (_event, input: unknown) => attempt(() => createNote(input && typeof input === 'object' ? (input as Partial<NewNote>) : {})))
+  ipcMain.handle(IPC.noteForEvent, (_event, id: unknown) => attempt(() => noteForEvent(text(id))))
+  ipcMain.handle(IPC.noteForTask, (_event, id: unknown) => attempt(() => noteForTask(text(id))))
+  ipcMain.handle(IPC.quickNote, (_event, content: unknown) => attempt(() => quickNote(text(content))))
+  ipcMain.handle(IPC.renameNote, (_event, path: unknown, name: unknown) => attempt(() => renameNote(text(path), text(name))))
+  ipcMain.handle(IPC.moveNote, (_event, path: unknown, courseKey: unknown) => attempt(() => moveNote(text(path), stringOrNull(courseKey))))
+  ipcMain.handle(IPC.trashNote, (_event, path: unknown) =>
+    attempt(async () => {
+      await trashNote(text(path))
+      return null
+    })
+  )
+  ipcMain.handle(IPC.importPdfs, (event, courseKey: unknown, files: unknown) =>
+    attempt(() =>
+      importPdfs(stringOrNull(courseKey), Array.isArray(files) ? files.filter((file): file is string => typeof file === 'string') : undefined, BrowserWindow.fromWebContents(event.sender))
+    )
+  )
+  ipcMain.on(IPC.showNoteInFolder, (_event, path: unknown) => {
+    try {
+      showInFolder(stringOrNull(path))
+    } catch {
+      // Not set up yet or outside the notes folder: nothing to show.
+    }
+  })
+  ipcMain.handle(IPC.searchNotes, (_event, query: unknown) => searchNotes(text(query)))
 }

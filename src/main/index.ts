@@ -2,6 +2,9 @@ import { app, Menu } from 'electron'
 import { IPC } from '../shared/types'
 import { AUTOSTART_ARG, refreshAutostart } from './autostart'
 import { startCalendarSync } from './calendar'
+import { syncCourseFolders } from './courseNotes'
+import { startNotesWatch } from './notes'
+import { handleNotesScheme, registerNotesScheme } from './notesProtocol'
 import { startReminders } from './reminders'
 import { registerIpc } from './ipc'
 import { getSettings } from './settings'
@@ -21,6 +24,7 @@ const MINI_ARG = '--mini'
 const missingArgs = process.env['ELECTRON_RENDERER_URL'] ? [] : missingStartupArgs(process.argv)
 
 fixCursorSize()
+registerNotesScheme()
 
 const smokeDir = smokeTestDir(process.argv)
 const dumpFile = tissDumpFile(process.argv)
@@ -56,11 +60,17 @@ async function start(): Promise<void> {
   Menu.setApplicationMenu(null)
   refreshAutostart()
   registerIpc()
+  handleNotesScheme()
   const trayHost = await trayHostAvailable()
   createTray(trayHost)
   createMiniWindow()
   setOnMainClosed(() => void onMainClosed())
-  startCalendarSync(() => broadcast(IPC.calendarChanged))
+  startNotesWatch(() => broadcast(IPC.notesChanged))
+  startCalendarSync(() => {
+    broadcast(IPC.calendarChanged)
+    // New courses get their notes folder (once the notes are set up).
+    syncCourseFolders()
+  })
   startTasksSync(() => broadcast(IPC.tasksChanged))
   startReminders()
 

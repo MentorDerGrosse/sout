@@ -118,6 +118,18 @@ export default function Today({ onNavigate }: { onNavigate: (view: View) => void
                 action={tissConnected ? undefined : toSettings}
               />
               <Step
+                status={state.settings.notesDir ? 'done' : 'todo'}
+                title="Notizordner eingerichtet"
+                hint={state.settings.notesDir ? `Deine Notizen liegen in ${state.settings.notesDir}.` : 'Ein Ordner mit Unterordnern für jedes Fach.'}
+                action={
+                  state.settings.notesDir ? undefined : (
+                    <button type="button" className="button small secondary" onClick={() => onNavigate('notes')}>
+                      Einrichten
+                    </button>
+                  )
+                }
+              />
+              <Step
                 status={tasks?.connected ? 'done' : 'todo'}
                 title="TUWEL verbunden"
                 hint={tasks?.connected ? `Angemeldet${tasks.user ? ` als ${tasks.user}` : ''}.` : 'Einmal über den TU-Wien-Login anmelden.'}

@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { KeyRound, LoaderCircle, LogIn, LogOut } from 'lucide-react'
+import { FolderOpen, KeyRound, LoaderCircle, LogIn, LogOut } from 'lucide-react'
 import { REMINDER_CHOICES, type AppInfo, type Course, type SecretsStatus, type Settings } from '../../../shared/types'
 import { Callout, Command, Toggle } from '../components'
 import { syncStatus, useCalendar } from '../lib/calendar'
 import { useAppState } from '../lib/hooks'
+import { useNotes } from '../lib/notes'
 import { useTasks } from '../lib/tasks'
 
 const INSTALL_EXTENSION = 'sudo dnf install gnome-shell-extension-appindicator'
@@ -87,6 +88,8 @@ export default function SettingsView() {
       </section>
 
       <RemindersSection settings={settings} />
+
+      <NotesSection />
 
       <CoursesSection />
 
@@ -402,6 +405,60 @@ function RemindersSection({ settings }: { settings: Settings }) {
           />
         </div>
       </div>
+    </section>
+  )
+}
+
+function NotesSection() {
+  const { notes, reload } = useNotes()
+  const [error, setError] = useState<string | null>(null)
+  if (!notes) return null
+
+  const change = async (): Promise<void> => {
+    const dir = await window.sout.chooseNotesDir()
+    if (!dir) return
+    const result = await window.sout.setupNotes(dir)
+    setError(result.ok ? null : result.error)
+    await reload()
+  }
+
+  return (
+    <section className="section">
+      <h2>Notizen</h2>
+      <div className="rows">
+        <div className="row column">
+          <div className="row-head">
+            <div className="row-text">
+              <div className="row-title">Notizordner</div>
+              <div className="row-desc">
+                {notes.root ? (
+                  <>
+                    <code>{notes.root}</code>
+                    {notes.missing && ' – gerade nicht vorhanden'}
+                  </>
+                ) : (
+                  'Noch nicht eingerichtet – das geht auf der Seite „Notizen“.'
+                )}
+              </div>
+            </div>
+            <span className={`pill${notes.root && !notes.missing ? ' ok' : notes.missing ? ' warn' : ''}`}>
+              {notes.missing ? 'fehlt' : notes.root ? 'eingerichtet' : 'nicht eingerichtet'}
+            </span>
+          </div>
+          {notes.root && (
+            <div className="form-row">
+              <button type="button" className="button secondary" onClick={() => window.sout.showNoteInFolder(null)} disabled={notes.missing}>
+                <FolderOpen size={14} /> Im Dateimanager öffnen
+              </button>
+              <button type="button" className="button secondary" onClick={() => void change()}>
+                Anderen Ordner wählen …
+              </button>
+            </div>
+          )}
+          {error && <Callout kind="error" title={error} />}
+        </div>
+      </div>
+      <p className="section-hint">Beim Wechsel werden vorhandene Notizen nicht verschoben – sout zeigt dann die Notizen im neuen Ordner.</p>
     </section>
   )
 }

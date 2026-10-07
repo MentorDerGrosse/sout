@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import { IPC, type SoutApi, type View } from '../shared/types'
 
 // The only bridge between the UI and the main process. The UI has no Node.js access.
@@ -33,9 +33,27 @@ const api: SoutApi = {
   setTaskDone: (id, done) => ipcRenderer.invoke(IPC.setTaskDone, id, done),
   deleteTodo: (id) => ipcRenderer.invoke(IPC.deleteTodo, id),
   onTasksChanged: (listener) => subscribe(IPC.tasksChanged, listener),
-  openMain: (view) => ipcRenderer.send(IPC.openMain, view),
+  getNotes: () => ipcRenderer.invoke(IPC.getNotes),
+  setupNotes: (dir) => ipcRenderer.invoke(IPC.setupNotes, dir),
+  chooseNotesDir: () => ipcRenderer.invoke(IPC.chooseNotesDir),
+  readNote: (path) => ipcRenderer.invoke(IPC.readNote, path),
+  writeNote: (path, content, baseModified) => ipcRenderer.invoke(IPC.writeNote, path, content, baseModified),
+  flushNote: (path, content, baseModified) => ipcRenderer.sendSync(IPC.flushNote, path, content, baseModified) === true,
+  createNote: (input) => ipcRenderer.invoke(IPC.createNote, input),
+  noteForEvent: (eventId) => ipcRenderer.invoke(IPC.noteForEvent, eventId),
+  noteForTask: (taskId) => ipcRenderer.invoke(IPC.noteForTask, taskId),
+  quickNote: (text) => ipcRenderer.invoke(IPC.quickNote, text),
+  renameNote: (path, name) => ipcRenderer.invoke(IPC.renameNote, path, name),
+  moveNote: (path, courseKey) => ipcRenderer.invoke(IPC.moveNote, path, courseKey),
+  trashNote: (path) => ipcRenderer.invoke(IPC.trashNote, path),
+  importPdfs: (courseKey, files) => ipcRenderer.invoke(IPC.importPdfs, courseKey, files),
+  showNoteInFolder: (path) => ipcRenderer.send(IPC.showNoteInFolder, path),
+  searchNotes: (query) => ipcRenderer.invoke(IPC.searchNotes, query),
+  onNotesChanged: (listener) => subscribe(IPC.notesChanged, listener),
+  filePath: (file) => webUtils.getPathForFile(file),
+  openMain: (view, note) => ipcRenderer.send(IPC.openMain, view, note),
   hideMini: () => ipcRenderer.send(IPC.hideMini),
-  onNavigate: (listener) => subscribe<[View]>(IPC.navigate, listener),
+  onNavigate: (listener) => subscribe<[View, string | undefined]>(IPC.navigate, listener),
   onStateChanged: (listener) => subscribe(IPC.stateChanged, listener)
 }
 

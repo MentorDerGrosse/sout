@@ -1,16 +1,20 @@
 import { useState, type FormEvent } from 'react'
-import { ChevronDown, ExternalLink, LockKeyhole, LogIn, Plus, RefreshCw, Trash2 } from 'lucide-react'
-import type { CalendarData, Task, TasksData } from '../../../shared/types'
+import { ChevronDown, ExternalLink, LockKeyhole, LogIn, NotebookPen, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import type { CalendarData, NotesData, Task, TasksData, View } from '../../../shared/types'
 import { Callout } from '../components'
 import { useCalendar } from '../lib/calendar'
 import { useNow } from '../lib/hooks'
+import { taskNotePath, useNotes } from '../lib/notes'
 import { dueText, GROUP_LABELS, groupTasks, isUrgent, opensLater, opensText, remainingText, splitTasks, taskCourse, useTasks } from '../lib/tasks'
 
 const syncFormat = new Intl.DateTimeFormat('de-AT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 
-export default function DeadlinesView() {
+type OpenNote = (path: string, fresh?: boolean) => void
+
+export default function DeadlinesView({ onOpenNote, onNavigate }: { onOpenNote: OpenNote; onNavigate: (view: View) => void }) {
   const data = useTasks()
   const calendar = useCalendar()
+  const { notes } = useNotes()
   const now = useNow(60_000)
   const [adding, setAdding] = useState(false)
   const [showDone, setShowDone] = useState(false)
@@ -63,7 +67,7 @@ export default function DeadlinesView() {
             <div key={key} className="task-day">
               <div className={`task-day-label${key === 'overdue' ? ' overdue' : ''}`}>{GROUP_LABELS[key]}</div>
               {tasks.map((task) => (
-                <TaskCard key={task.id} task={task} calendar={calendar} now={now} />
+                <TaskCard key={task.id} task={task} calendar={calendar} notes={notes} now={now} onOpenNote={onOpenNote} onNavigate={onNavigate} />
               ))}
             </div>
           ))}
@@ -77,7 +81,7 @@ export default function DeadlinesView() {
           </h2>
           <p className="section-hint">Kannst du noch nicht abgeben – sortiert danach, was zuerst aufmacht.</p>
           {later.map((task) => (
-            <TaskCard key={task.id} task={task} calendar={calendar} now={now} />
+            <TaskCard key={task.id} task={task} calendar={calendar} notes={notes} now={now} onOpenNote={onOpenNote} onNavigate={onNavigate} />
           ))}
         </section>
       )}
@@ -87,7 +91,7 @@ export default function DeadlinesView() {
           <button type="button" className="group-toggle" aria-expanded={showDone} onClick={() => setShowDone(!showDone)}>
             <ChevronDown size={14} className={showDone ? '' : 'rotated'} /> Erledigt ({done.length})
           </button>
-          {showDone && done.map((task) => <TaskCard key={task.id} task={task} calendar={calendar} now={now} />)}
+          {showDone && done.map((task) => <TaskCard key={task.id} task={task} calendar={calendar} notes={notes} now={now} onOpenNote={onOpenNote} onNavigate={onNavigate} />)}
         </section>
       )}
     </>
@@ -178,8 +182,26 @@ function TodoForm({ calendar, onDone }: { calendar: CalendarData | null; onDone:
 
 const longFormat = new Intl.DateTimeFormat('de-AT', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
 
-function TaskCard({ task, calendar, now }: { task: Task; calendar: CalendarData | null; now: Date }) {
+function TaskCard(props: {
+  task: Task
+  calendar: CalendarData | null
+  notes: NotesData | null
+  now: Date
+  onOpenNote: OpenNote
+  onNavigate: (view: View) => void
+}) {
+  const { task, calendar, now } = props
   const [expanded, setExpanded] = useState(false)
+  const [noteError, setNoteError] = useState<string | null>(null)
+  const notePath = taskNotePath(props.notes, task)
+  const openNote = async (): Promise<void> => {
+    // Without a notes folder the notes page explains how to set it up.
+    if (!props.notes?.root) return props.onNavigate('notes')
+    if (notePath) return props.onOpenNote(notePath)
+    const result = await window.sout.noteForTask(task.id)
+    if (result.ok) props.onOpenNote(result.value, true)
+    else setNoteError(result.error)
+  }
   const course = taskCourse(task, calendar)
   const done = task.status === 'done'
   const overdue = !done && Boolean(task.due && new Date(task.due) < now)
@@ -269,12 +291,16 @@ function TaskCard({ task, calendar, now }: { task: Task; calendar: CalendarData 
                 <ExternalLink size={13} /> {task.actionLabel ?? 'In TUWEL öffnen'}
               </a>
             )}
+            <button type="button" className="button small secondary" onClick={() => void openNote()}>
+              <NotebookPen size={13} /> {notePath ? 'Notizen öffnen' : 'Notizen anlegen'}
+            </button>
             {task.source === 'own' && (
               <button type="button" className="button small danger" onClick={() => void window.sout.deleteTodo(task.id)}>
                 <Trash2 size={13} /> Löschen
               </button>
             )}
           </div>
+          {noteError && <Callout kind="error" title={noteError} />}
         </div>
       )}
     </article>
