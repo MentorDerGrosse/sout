@@ -7,7 +7,7 @@ import { readJson, writeJson } from './jsonFile'
 import { resourcePath } from './paths'
 import { clearSecret, getSecret, hasSecret, setSecret } from './secrets'
 import { TuwelError, tuwelCall } from './tuwelApi'
-import { forgetTuwelLogin, loginToTuwel } from './tuwelLogin'
+import { forgetTuwelLogin, lastLoginTrace, loginToTuwel } from './tuwelLogin'
 import { fetchSnapshot, toTasks, type MoodleSnapshot } from './tuwelTasks'
 import { showMain } from './windows'
 
@@ -26,6 +26,8 @@ interface Cache {
   tokenLog?: string[]
   /** The "please log in again" notification was shown for the current expiry. */
   loginNotified?: boolean
+  /** Pages the last manual login went through (host and path only) and how it ended. */
+  loginTrace?: string[]
 }
 
 interface Todo {
@@ -214,9 +216,17 @@ function logToken(event: string): void {
 
 export async function loginTuwel(): Promise<void> {
   // With a still valid TU Wien login this needs no window at all.
-  const token = await loginToTuwel({ silent: true }).catch(() => loginToTuwel())
-  // Make sure the token works before keeping it.
-  const site = await tuwelCall<{ fullname: string }>(token, 'core_webservice_get_site_info')
+  let site: { fullname: string }
+  let token: string
+  try {
+    token = await loginToTuwel({ silent: true }).catch(() => loginToTuwel())
+    // Make sure the token works before keeping it.
+    site = await tuwelCall<{ fullname: string }>(token, 'core_webservice_get_site_info')
+  } catch (error) {
+    saveCache({ ...loadCache(), loginTrace: [...lastLoginTrace(), `Fehler: ${error instanceof Error ? error.message : String(error)}`] })
+    throw error
+  }
+  saveCache({ ...loadCache(), loginTrace: lastLoginTrace() })
   keepToken(token)
   logToken('angemeldet')
   saveCache({ ...loadCache(), user: site.fullname, error: null, expired: false, loginNotified: false })
