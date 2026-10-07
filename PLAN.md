@@ -25,7 +25,7 @@ Dazu:
 | Wayland | App läuft über XWayland, damit das Mini-Fenster oben rechts platziert werden kann. Der Schalter `--ozone-platform=x11` muss beim Start übergeben werden (npm-Skripte, `sout`-Befehl und Autostart tun das; sonst startet sout sich einmal selbst damit neu). Zur Laufzeit gesetzt erreicht er nur die Kindprozesse – dann bleiben die Fenster leer. |
 | Sprache | Electron startet mit `--lang=de-AT` – Datumsfelder und Menüs sind deutsch, auch wenn das System auf Englisch steht |
 | Notizen | Markdown-Dateien in einem frei wählbaren Ordner (Vorschlag `~/Studium`), angelegt erst nach Klick auf „Ordner anlegen“; LaTeX-Formeln (KaTeX) und PDFs (Folien) wichtig; Screenshots niedrige Priorität; keine Handschrift |
-| Reihenfolge | egal, daher Phase 0 bis 4 wie unten; Windows & Mac (Phase 5) ganz zum Schluss |
+| Reihenfolge | egal, daher Phase 0 bis 4 wie unten; dann Windows & Mac (Phase 5); alles für „später“ und alle Ideen ganz am Ende |
 
 ## Datenquellen
 
@@ -50,7 +50,7 @@ Dazu:
 
 ## Architektur
 
-- **Hauptprozess** (`src/main`): Fenster, Tray, Autostart, Einstellungen, Tokens, später der Sync
+- **Hauptprozess** (`src/main`): Fenster, Tray, Autostart, Einstellungen, Tokens, Sync mit TISS und TUWEL, Notizdateien
 - **Preload** (`src/preload`): schmale, typisierte Brücke `window.sout`. Der Vertrag steht in `src/shared/types.ts`.
 - **Oberfläche** (`src/renderer`): React. Hauptfenster und Mini-Fenster nutzen dieselbe Seite (`#mini`).
 - **Daten**
@@ -89,7 +89,6 @@ Dazu:
 - [x] Termin-Details: Raum mit TUW-Maps-Link und Adresse (Raumliste aus better-tiss-calendar), Link zur LVA in TISS
 - [x] „Heute“ und Mini-Fenster zeigen die nächsten Termine, mit „in 25 min“ / „läuft“
 - [ ] Eigene Termine (Lerngruppe, Lernblöcke)
-- später: Link zum TUWEL-Kurs, LectureTube-Link, Änderungen erkennen (Raumwechsel, Absage) und melden, Überschneidungen markieren
 
 ### Phase 2 – Abgaben & Tests (TUWEL) ✅ (mit echtem Login noch zu prüfen)
 
@@ -106,7 +105,6 @@ Dazu:
 - [ ] Beobachten, wie lange die stille Erneuerung ohne neuen Login hält (Protokoll: `tokenLog` in `~/.config/sout/tuwel.json`)
 - [ ] Prüfen, ob TUWEL bei Tests den Öffnungszeitpunkt liefert (`--dump-tuwel`)
 - [ ] Klären, warum nach dem manuellen Login erst die Erneuerung im Hintergrund den Token bekommt (Protokoll: `loginTrace` in `tuwel.json`)
-- später: Kreuzerlübungen genauer (was ist angekreuzt), Terminbuchungen für Abgabegespräche, Noten und Feedback, Forum-Ankündigungen, Meldung bei neuen Aufgaben, Raum bei Präsenztests aus TISS
 
 ### Phase 3 – Notizen ✅ (im Alltag noch zu erproben)
 
@@ -121,7 +119,6 @@ Dazu:
 - [x] Volltextsuche (auch über Dateinamen), Tags mit `#tag`
 - [x] Schnellnotiz aus dem Mini-Fenster → Inbox, später per „In Fach verschieben“ einordnen
 - [ ] Im Alltag ausprobieren: Ordner einrichten, eine Vorlesung mitschreiben, Folien daneben
-- später: Bilder per Strg+V, Links zwischen Notizen, TUWEL-Unterlagen automatisch laden, PDF-Export, Karteikarten, Rechtschreibprüfung (zurzeit aus, sonst wären Formeln rot unterstrichen)
 
 ```
 ~/Studium/
@@ -154,9 +151,39 @@ Gestartet würde sout dort schon, und Kalender, Abgaben und Einstellungen funkti
 - [ ] Auf echten Windows- und Mac-Rechnern testen
 - [ ] Bei Bedarf Installer für Windows bzw. `.dmg` für macOS
 
-## Ideen für später
+### Später & Ideen (ganz am Ende, nach Phase 5)
 
-Lernplaner (vom Prüfungstermin rückwärts Lernblöcke einplanen) · Lernzeit pro Fach · ECTS- und Notenübersicht · Mensa-Plan
+Hier sammelt sich alles, was „später“ kommen soll, damit nichts verloren geht. Neue Ideen kommen auch hierher. Meldungen bei Raumwechsel, Absage, neuer Aufgabe oder Note stehen schon in Phase 4.
+
+Kalender
+
+- [ ] Link zum TUWEL-Kurs
+- [ ] LectureTube-Link
+- [ ] Überschneidungen markieren
+
+Abgaben & Tests
+
+- [ ] Kreuzerlübungen genauer (was ist angekreuzt)
+- [ ] Terminbuchungen für Abgabegespräche
+- [ ] Noten und Feedback ansehen
+- [ ] Forum-Ankündigungen
+- [ ] Raum bei Präsenztests aus TISS
+
+Notizen
+
+- [ ] Bilder per Strg+V
+- [ ] Links zwischen Notizen
+- [ ] TUWEL-Unterlagen automatisch laden
+- [ ] PDF-Export
+- [ ] Karteikarten
+- [ ] Rechtschreibprüfung (zurzeit aus, sonst wären Formeln rot unterstrichen)
+
+Sonstiges
+
+- [ ] Lernplaner (vom Prüfungstermin rückwärts Lernblöcke einplanen)
+- [ ] Lernzeit pro Fach
+- [ ] ECTS- und Notenübersicht
+- [ ] Mensa-Plan
 
 ## Offene Punkte
 
