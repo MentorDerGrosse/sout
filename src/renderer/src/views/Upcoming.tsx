@@ -1,23 +1,10 @@
-import { Check, ClipboardList, NotebookPen, type LucideIcon } from 'lucide-react'
+import { Check, NotebookPen, type LucideIcon } from 'lucide-react'
 import type { View } from '../../../shared/types'
 
-type UpcomingView = Exclude<View, 'today' | 'calendar' | 'settings'>
+type UpcomingView = Exclude<View, 'today' | 'calendar' | 'deadlines' | 'settings'>
 
 /** Placeholder pages for the parts that come in later phases (see PLAN.md). */
 const PAGES: Record<UpcomingView, { title: string; intro: string; phase: number; icon: LucideIcon; features: string[] }> = {
-  deadlines: {
-    title: 'Abgaben & Tests',
-    intro: 'Was du noch offen hast, direkt aus TUWEL.',
-    phase: 2,
-    icon: ClipboardList,
-    features: [
-      'Sortiert nach Fälligkeit: überfällig, heute, diese Woche, später',
-      'Was, bis wann, wie und wo – mit Direktlink zur Abgabe',
-      'Status aus TUWEL: Abgegebenes verschwindet von selbst',
-      'Eigene To-dos ergänzen und abhaken',
-      'Erinnerungen als Benachrichtigung'
-    ]
-  },
   notes: {
     title: 'Notizen',
     intro: 'Mitschriften, automatisch nach deinen Fächern sortiert.',

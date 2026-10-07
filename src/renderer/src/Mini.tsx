@@ -1,5 +1,7 @@
 import { CalendarDays, ClipboardList, Maximize2, Settings } from 'lucide-react'
 import { EventList } from './EventList'
+import { TaskList } from './TaskList'
+import { openTasks, useTasks } from './lib/tasks'
 import { upcoming, useCalendar } from './lib/calendar'
 import { formatShortDate } from './lib/dates'
 import { useAppState, useNow } from './lib/hooks'
@@ -11,6 +13,8 @@ export default function Mini() {
   const tissConnected = state?.secrets.tissToken ?? false
   const calendar = useCalendar()
   const next = calendar ? upcoming(calendar, now, 4) : []
+  const tasks = useTasks()
+  const due = tasks ? openTasks(tasks).slice(0, 3) : []
 
   return (
     <div className="mini">
@@ -46,7 +50,17 @@ export default function Mini() {
         <h3>
           <ClipboardList size={13} /> Fällig
         </h3>
-        <p className="mini-empty">Abgaben und Tests aus TUWEL erscheinen hier ab Phase 2.</p>
+        {due.length > 0 ? (
+          <TaskList tasks={due} calendar={calendar} now={now} />
+        ) : tasks?.connected ? (
+          <p className="mini-empty">Nichts offen.</p>
+        ) : (
+          <p className="mini-empty">
+            <button type="button" className="link" onClick={() => window.sout.openMain('deadlines')}>
+              TUWEL verbinden
+            </button>
+          </p>
+        )}
       </section>
 
       <footer className="mini-footer">

@@ -3,7 +3,7 @@ import { IPC, type View } from '../shared/types'
 import { preloadPath, rendererHtml, resourcePath } from './paths'
 import { getSettings, updateSettings } from './settings'
 
-const MINI_SIZE = { width: 360, height: 460 }
+const MINI_SIZE = { width: 360, height: 560 }
 const MINI_MARGIN = 8
 /** A click on the tray icon first blurs (and thereby hides) an open mini window – don't reopen it right away. */
 const REOPEN_GUARD_MS = 300

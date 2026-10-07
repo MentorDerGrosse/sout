@@ -4,6 +4,7 @@ import type { View } from '../../shared/types'
 import { Logo } from './components'
 import { currentSemester } from './lib/dates'
 import CalendarView from './views/CalendarView'
+import DeadlinesView from './views/DeadlinesView'
 import SettingsView from './views/SettingsView'
 import Today from './views/Today'
 import Upcoming from './views/Upcoming'
@@ -50,6 +51,8 @@ export default function App({ initialView }: { initialView: View }) {
               <Today onNavigate={setView} />
             ) : view === 'settings' ? (
               <SettingsView />
+            ) : view === 'deadlines' ? (
+              <DeadlinesView />
             ) : (
               <Upcoming view={view} />
             )}

@@ -8,9 +8,9 @@
   "main": "./out/main/index.js",
   "desktopName": "sout.desktop",
   "scripts": {
-    "dev": "electron-vite dev -- --ozone-platform=x11",
+    "dev": "electron-vite dev -- --ozone-platform=x11 --lang=de-AT",
     "build": "electron-vite build",
-    "start": "electron-vite preview -- --ozone-platform=x11",
+    "start": "electron-vite preview -- --ozone-platform=x11 --lang=de-AT",
     "typecheck": "tsc -p tsconfig.node.json --noEmit --composite false && tsc -p tsconfig.web.json --noEmit --composite false",
     "icons": "node scripts/gen-icons.mjs",
     "install-desktop": "node scripts/install-desktop.mjs",

@@ -23,6 +23,7 @@ Dazu:
 | Mini-Fenster | Toolbox-Stil: Symbol oben rechts, Klick öffnet ein kleines Fenster darunter, Klick daneben oder Esc schließt es |
 | Tray unter GNOME | Erweiterung „AppIndicator and KStatusNotifierItem Support“ (`gnome-shell-extension-appindicator`) |
 | Wayland | App läuft über XWayland, damit das Mini-Fenster oben rechts platziert werden kann. Der Schalter `--ozone-platform=x11` muss beim Start übergeben werden (npm-Skripte, `sout`-Befehl und Autostart tun das; sonst startet sout sich einmal selbst damit neu). Zur Laufzeit gesetzt erreicht er nur die Kindprozesse – dann bleiben die Fenster leer. |
+| Sprache | Electron startet mit `--lang=de-AT` – Datumsfelder und Menüs sind deutsch, auch wenn das System auf Englisch steht |
 | Notizen | Markdown-Dateien; LaTeX-Formeln wichtig; PDFs (Folien) wichtig; Screenshots niedrige Priorität; keine Handschrift |
 | Reihenfolge | egal, daher Phase 0 bis 4 wie unten |
 
@@ -87,15 +88,17 @@ Dazu:
 - [ ] Eigene Termine (Lerngruppe, Lernblöcke)
 - später: Link zum TUWEL-Kurs (kommt mit Phase 2), „Mitschrift öffnen“ (Phase 3), LectureTube-Link, Änderungen erkennen (Raumwechsel, Absage) und melden, Überschneidungen markieren
 
-### Phase 2 – Abgaben & Tests (TUWEL)
+### Phase 2 – Abgaben & Tests (TUWEL) ✅ (mit echtem Login noch zu prüfen)
 
-- [ ] TU-Login im eingebetteten Fenster (Moodle-App-Ablauf über `admin/tool/mobile/launch.php`), Token verschlüsselt speichern
-- [ ] Liste „Was hab ich noch auf?“: überfällig / heute / diese Woche / später
-- [ ] Pro Eintrag: was (Titel, Beschreibung), bis wann (Countdown, letzte Abgabemöglichkeit), wie (Datei-Upload, Online-Text, Test, Dateitypen), wo (Direktlink; bei Präsenztests der Raum aus TISS), Status (offen / Entwurf / abgegeben / bewertet)
-- [ ] Abgegebenes verschwindet automatisch; eigene To-dos ergänzen und abhaken
-- [ ] Deadlines im Kalender
-- [ ] Erinnerungen als GNOME-Benachrichtigung (z. B. 3 Tage / 1 Tag / 3 Stunden vorher, einstellbar)
-- später: Kreuzerlübungen und Terminbuchungen für Abgabegespräche (prüfen, was die Schnittstelle liefert); Noten und Feedback; Forum-Ankündigungen; Meldung bei neuen Aufgaben
+- [x] TU-Login in eigenem Fenster wie die Moodle-App: `admin/tool/mobile/launch.php` → TU-Wien-Login → `moodlemobile://token=…` (Signatur geprüft), Token verschlüsselt gespeichert
+- [x] Daten über die Moodle-Schnittstelle: Zeitleiste (`core_calendar_get_action_events_by_timesort`), Abgaben (`mod_assign_get_assignments`, `mod_assign_get_submission_status`), Tests (`mod_quiz_get_quizzes_by_courses`); Sync beim Start, alle 30 Minuten, nach dem Aufwachen
+- [x] Seite „Abgaben“: überfällig / heute / morgen / diese Woche / später / ohne Termin / erledigt
+- [x] Pro Eintrag: was (Titel, Beschreibung), bis wann (Countdown, letzte Abgabemöglichkeit), wie (Datei-Upload, Online-Text, Dateitypen, Zeitlimit), wo (Direktlink zur Aktivität), Status (offen / Entwurf)
+- [x] Abgegebenes verschwindet automatisch (TUWEL-Zeitleiste); in sout abhaken; eigene To-dos mit Datum und Fach
+- [x] Deadlines im Kalender (ganztägige Zeile), auf „Heute“ und im Mini-Fenster
+- [x] Erinnerungen als Benachrichtigung, einstellbar: 3 Tage / 1 Tag / 3 Stunden / 1 Stunde vorher
+- [ ] Mit echtem TUWEL-Login testen und die Daten prüfen (`--dump-tuwel`)
+- später: Kreuzerlübungen genauer (was ist angekreuzt), Terminbuchungen für Abgabegespräche, Noten und Feedback, Forum-Ankündigungen, Meldung bei neuen Aufgaben, Raum bei Präsenztests aus TISS
 
 ### Phase 3 – Notizen
 

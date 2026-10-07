@@ -1180,3 +1180,287 @@ p {
   color: var(--text-muted);
   font-size: 12px;
 }
+
+/* ---------- Tasks (Abgaben) ---------- */
+
+.task-list {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.task-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+}
+
+.task-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.task-title {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-due {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.task-remaining {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.overdue,
+.task-due.overdue,
+.task-remaining.overdue,
+.task-when.overdue {
+  color: var(--danger);
+}
+
+.pill.warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.deadlines-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.header-actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+.connect-card,
+.todo-form {
+  margin-bottom: 20px;
+}
+
+.page > .callout {
+  margin-bottom: 16px;
+}
+
+.task-group {
+  margin-bottom: 22px;
+}
+
+.task-group h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.task-group h2.overdue {
+  color: var(--danger);
+}
+
+.group-count {
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+.group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.group-toggle .rotated {
+  transform: rotate(-90deg);
+}
+
+.task-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 4px auto 1fr;
+  column-gap: 12px;
+  margin-bottom: 8px;
+  padding: 12px 16px 12px 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.task-card > .event-bar {
+  grid-row: 1 / span 2;
+  margin: -12px 0;
+  border-radius: 0;
+}
+
+.task-card.done {
+  opacity: 0.6;
+}
+
+.task-card.done .task-title {
+  text-decoration: line-through;
+}
+
+.task-check {
+  width: 17px;
+  height: 17px;
+  margin: 2px 0 0;
+  accent-color: var(--button);
+  cursor: pointer;
+}
+
+.task-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.task-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.task-when {
+  flex: none;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.task-details {
+  display: flex;
+  grid-column: 3;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.task-details .info-list {
+  grid-template-columns: 120px 1fr;
+}
+
+.task-description {
+  max-height: 260px;
+  overflow-y: auto;
+  color: var(--text);
+  font-size: 13px;
+  white-space: pre-line;
+  user-select: text;
+}
+
+.task-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.task-actions .button {
+  text-decoration: none;
+}
+
+.todo-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.todo-form .input:first-child {
+  flex: 2 1 260px;
+}
+
+.todo-form .date-input {
+  flex: 0 0 210px;
+}
+
+.todo-form .course-select {
+  flex: 0 0 150px;
+}
+
+.todo-form > .callout {
+  flex-basis: 100%;
+}
+
+select.input {
+  padding-right: 8px;
+}
+
+.reminder-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.checkbox input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--button);
+}
+
+.fc .kind-deadline {
+  border-left-width: 3px;
+}

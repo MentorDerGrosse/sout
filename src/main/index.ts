@@ -1,38 +1,40 @@
 import { app, Menu } from 'electron'
 import { IPC } from '../shared/types'
-import { AUTOSTART_ARG } from './autostart'
+import { AUTOSTART_ARG, refreshAutostart } from './autostart'
 import { startCalendarSync } from './calendar'
+import { startReminders } from './reminders'
 import { registerIpc } from './ipc'
 import { getSettings } from './settings'
-import { dumpTiss, runSmokeTest, smokeTestDir, tissDumpFile } from './smoke'
-import { displayArgs, fixCursorSize, trayHostAvailable } from './system'
+import { dumpTiss, dumpTuwel, runSmokeTest, smokeTestDir, tissDumpFile, tuwelDumpFile } from './smoke'
+import { fixCursorSize, missingStartupArgs, trayHostAvailable } from './system'
+import { startTasksSync } from './tasks'
 import { createTray, ensureTray } from './tray'
 import { broadcast, createMiniWindow, notifyRunningInBackground, setOnMainClosed, showMain, toggleMini } from './windows'
 
 /** `sout --mini` toggles the mini window – meant for a GNOME keyboard shortcut. */
 const MINI_ARG = '--mini'
 
-// The display backend has to come from the command line (see displayArgs). Setting it here with
-// app.commandLine.appendSwitch would only reach the child processes: the windows would live on
-// Wayland while the GPU process draws for X11, and nothing shows up. So if sout was started
-// without a choice, start it again with the flag. `npm run dev` passes the flag itself.
-const restartWithFlags =
-  displayArgs().length > 0 &&
-  !process.argv.some((arg) => arg.startsWith('--ozone-platform=')) &&
-  !process.env['ELECTRON_RENDERER_URL']
+// Display backend and language have to come from the command line (see startupArgs). Setting them
+// here with app.commandLine.appendSwitch would only reach the child processes – for the display
+// backend that means windows on Wayland, a GPU process drawing for X11, and nothing shows up.
+// So if sout was started without them, start it again with them. `npm run dev` passes them itself.
+const missingArgs = process.env['ELECTRON_RENDERER_URL'] ? [] : missingStartupArgs(process.argv)
 
 fixCursorSize()
 
 const smokeDir = smokeTestDir(process.argv)
 const dumpFile = tissDumpFile(process.argv)
+const tuwelDump = tuwelDumpFile(process.argv)
 
-if (restartWithFlags) {
-  app.relaunch({ args: [...process.argv.slice(1), ...displayArgs()] })
+if (missingArgs.length > 0) {
+  app.relaunch({ args: [...process.argv.slice(1), ...missingArgs] })
   app.exit(0)
 } else if (smokeDir) {
   void runSmokeTest(smokeDir)
 } else if (dumpFile) {
   void dumpTiss(dumpFile)
+} else if (tuwelDump) {
+  void dumpTuwel(tuwelDump)
 } else if (!app.requestSingleInstanceLock()) {
   // Already running: the first instance gets our arguments via 'second-instance'.
   app.quit()
@@ -48,12 +50,15 @@ if (restartWithFlags) {
 
 async function start(): Promise<void> {
   Menu.setApplicationMenu(null)
+  refreshAutostart()
   registerIpc()
   const trayHost = await trayHostAvailable()
   createTray(trayHost)
   createMiniWindow()
   setOnMainClosed(() => void onMainClosed())
   startCalendarSync(() => broadcast(IPC.calendarChanged))
+  startTasksSync(() => broadcast(IPC.tasksChanged))
+  startReminders()
 
   const autostarted = process.argv.includes(AUTOSTART_ARG)
   if (process.argv.includes(MINI_ARG)) toggleMini()

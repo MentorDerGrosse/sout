@@ -1,8 +1,8 @@
 import { app } from 'electron'
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { resourcePath } from './paths'
-import { displayArgs } from './system'
+import { startupArgs } from './system'
 
 // Linux autostart = a .desktop file in ~/.config/autostart (XDG autostart spec).
 // Electron's app.setLoginItemSettings() only covers macOS and Windows.
@@ -27,6 +27,13 @@ export function setAutostart(enabled: boolean): void {
   writeFileSync(file, autostartEntry())
 }
 
+/** Rewrites an existing autostart file if it is out of date (new startup flags, moved project folder). */
+export function refreshAutostart(): void {
+  if (!isAutostartEnabled()) return
+  const entry = autostartEntry()
+  if (readFileSync(autostartFile(), 'utf8') !== entry) writeFileSync(autostartFile(), entry)
+}
+
 export function autostartEntry(): string {
   // Unpackaged, the Electron binary needs the project folder as argument (runs the built app in out/).
   const command = app.isPackaged ? [process.execPath] : [process.execPath, app.getAppPath()]
@@ -35,7 +42,7 @@ export function autostartEntry(): string {
     'Type=Application',
     'Name=sout',
     'Comment=Studium organisieren: TISS, TUWEL, Notizen',
-    `Exec=${[...command, ...displayArgs(), AUTOSTART_ARG].map(quoteExecArg).join(' ')}`,
+    `Exec=${[...command, ...startupArgs(), AUTOSTART_ARG].map(quoteExecArg).join(' ')}`,
     `Icon=${resourcePath('icon.png')}`,
     'Terminal=false',
     'X-GNOME-Autostart-enabled=true',

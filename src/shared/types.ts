@@ -14,7 +14,17 @@ export interface Settings {
   startHiddenOnAutostart: boolean
   /** The "still running in the background" notification has been shown once. */
   closeHintShown: boolean
+  /** Remind about deadlines this many minutes before they are due. */
+  reminders: number[]
 }
+
+/** Reminder times offered in the settings: minutes before a deadline → label. */
+export const REMINDER_CHOICES: { minutes: number; label: string }[] = [
+  { minutes: 4320, label: '3 Tage' },
+  { minutes: 1440, label: '1 Tag' },
+  { minutes: 180, label: '3 Stunden' },
+  { minutes: 60, label: '1 Stunde' }
+]
 
 export type SecretKey = 'tissToken' | 'tuwelToken'
 
@@ -93,6 +103,58 @@ export interface CalendarData {
   syncing: boolean
 }
 
+/** Something to hand in or do: from TUWEL or an own to-do. */
+export interface Task {
+  id: string
+  source: 'tuwel' | 'own'
+  title: string
+  /** What kind of activity, e.g. "Abgabe", "Test", "Kreuzerlübung", "To-do". */
+  kindLabel: string
+  /** Moodle module name ("assign", "quiz", …); null for own to-dos. */
+  module: string | null
+  /** What happens at `due`: "fällig", "schließt", … */
+  dueLabel: string
+  /** LVA number, e.g. "185.A91" – links the task to the course from the TISS calendar. */
+  courseKey: string | null
+  /** Course name from TUWEL, for courses that aren't in the TISS calendar. */
+  courseName: string | null
+  due: string | null
+  /** Last possible submission (Moodle "cut-off date"). */
+  cutoff: string | null
+  /** When the activity opens (quizzes, assignments that aren't open yet). */
+  opens: string | null
+  timeLimitMinutes: number | null
+  description: string | null
+  /** How to hand in, e.g. "Datei-Upload (max. 1 Datei)", "Online-Text". */
+  submission: string[]
+  fileTypes: string | null
+  status: 'open' | 'draft' | 'done'
+  overdue: boolean
+  url: string | null
+  /** Moodle's label for the next step, e.g. "Abgabe hinzufügen". */
+  actionLabel: string | null
+}
+
+export interface TasksData {
+  tasks: Task[]
+  /** A TUWEL token is stored. */
+  connected: boolean
+  /** Name of the TUWEL account. */
+  user: string | null
+  syncedAt: string | null
+  error: string | null
+  /** TUWEL rejected the token – log in again. */
+  expired: boolean
+  syncing: boolean
+}
+
+export interface TodoInput {
+  title: string
+  /** ISO date-time or null. */
+  due: string | null
+  courseKey: string | null
+}
+
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string }
 
 export interface SoutApi {
@@ -112,6 +174,15 @@ export interface SoutApi {
   syncCalendar(): Promise<CalendarData>
   updateCourse(key: string, patch: CoursePatch): Promise<CalendarData>
   onCalendarChanged(listener: () => void): () => void
+  getTasks(): Promise<TasksData>
+  syncTasks(): Promise<TasksData>
+  /** Opens the TU Wien login and stores the TUWEL token. */
+  loginTuwel(): Promise<Result<TasksData>>
+  logoutTuwel(): Promise<TasksData>
+  addTodo(input: TodoInput): Promise<Result<TasksData>>
+  setTaskDone(id: string, done: boolean): Promise<TasksData>
+  deleteTodo(id: string): Promise<TasksData>
+  onTasksChanged(listener: () => void): () => void
   openMain(view?: View): void
   hideMini(): void
   onNavigate(listener: (view: View) => void): () => void
@@ -133,6 +204,14 @@ export const IPC = {
   syncCalendar: 'sout:sync-calendar',
   updateCourse: 'sout:update-course',
   calendarChanged: 'sout:calendar-changed',
+  getTasks: 'sout:get-tasks',
+  syncTasks: 'sout:sync-tasks',
+  loginTuwel: 'sout:login-tuwel',
+  logoutTuwel: 'sout:logout-tuwel',
+  addTodo: 'sout:add-todo',
+  setTaskDone: 'sout:set-task-done',
+  deleteTodo: 'sout:delete-todo',
+  tasksChanged: 'sout:tasks-changed',
   openMain: 'sout:open-main',
   hideMini: 'sout:hide-mini',
   navigate: 'sout:navigate',

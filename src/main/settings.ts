@@ -1,11 +1,12 @@
 import { app } from 'electron'
 import { join } from 'node:path'
-import type { Settings } from '../shared/types'
+import { REMINDER_CHOICES, type Settings } from '../shared/types'
 import { readJson, writeJson } from './jsonFile'
 
 const DEFAULTS: Settings = {
   startHiddenOnAutostart: true,
-  closeHintShown: false
+  closeHintShown: false,
+  reminders: [1440, 180]
 }
 
 let current: Settings | null = null
@@ -29,7 +30,11 @@ function sanitize(input: unknown): Partial<Settings> {
   if (input && typeof input === 'object') {
     for (const [key, fallback] of Object.entries(DEFAULTS)) {
       const value = (input as Record<string, unknown>)[key]
-      if (typeof value === typeof fallback) result[key] = value
+      if (Array.isArray(fallback)) {
+        if (Array.isArray(value)) result[key] = value.filter((item) => REMINDER_CHOICES.some((choice) => choice.minutes === item))
+      } else if (typeof value === typeof fallback) {
+        result[key] = value
+      }
     }
   }
   return result as Partial<Settings>

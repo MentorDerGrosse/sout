@@ -34,6 +34,10 @@ export function setSecret(key: SecretKey, value: string): void {
   writeJson(file(), store, 0o600)
 }
 
+export function hasSecret(key: SecretKey): boolean {
+  return Boolean(load()[key])
+}
+
 export function getSecret(key: SecretKey): string | null {
   const encrypted = load()[key]
   if (!encrypted) return null

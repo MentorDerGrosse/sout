@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { KeyRound, LoaderCircle } from 'lucide-react'
-import type { AppInfo, Course, SecretsStatus } from '../../../shared/types'
+import { KeyRound, LoaderCircle, LogIn, LogOut } from 'lucide-react'
+import { REMINDER_CHOICES, type AppInfo, type Course, type SecretsStatus, type Settings } from '../../../shared/types'
 import { Callout, Command, Toggle } from '../components'
 import { syncStatus, useCalendar } from '../lib/calendar'
 import { useAppState } from '../lib/hooks'
+import { useTasks } from '../lib/tasks'
 
 const INSTALL_EXTENSION = 'sudo dnf install gnome-shell-extension-appindicator'
 const ENABLE_EXTENSION = 'gnome-extensions enable appindicatorsupport@rgcjonas.gmail.com'
@@ -78,18 +79,14 @@ export default function SettingsView() {
         <h2>Zugänge</h2>
         <div className="rows">
           <TissRow connected={secrets.tissToken} onChanged={reload} />
-          <div className="row">
-            <div className="row-text">
-              <div className="row-title">TUWEL</div>
-              <div className="row-desc">Anmeldung über den TU-Login, wie bei der Moodle-App. Kommt in Phase 2.</div>
-            </div>
-            <span className="pill">bald</span>
-          </div>
+          <TuwelRow />
           <div className="row">
             <KeyringStatus secrets={secrets} />
           </div>
         </div>
       </section>
+
+      <RemindersSection settings={settings} />
 
       <CoursesSection />
 
@@ -315,5 +312,85 @@ function CourseRow({ course }: { course: Course }) {
       </div>
       <Toggle label={`${course.shortName} anzeigen`} checked={!course.hidden} onChange={(shown) => update({ hidden: !shown })} />
     </div>
+  )
+}
+
+const tuwelSync = new Intl.DateTimeFormat('de-AT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+
+function TuwelRow() {
+  const tasks = useTasks()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  if (!tasks) return null
+
+  const login = async (): Promise<void> => {
+    setBusy(true)
+    const result = await window.sout.loginTuwel()
+    setBusy(false)
+    setError(result.ok ? null : result.error)
+  }
+
+  return (
+    <div className="row column">
+      <div className="row-head">
+        <div className="row-text">
+          <div className="row-title">TUWEL</div>
+          <div className="row-desc">
+            {tasks.connected
+              ? [tasks.user && `Angemeldet als ${tasks.user}`, tasks.syncedAt && `Stand: ${tuwelSync.format(new Date(tasks.syncedAt))}`]
+                  .filter(Boolean)
+                  .join(' · ')
+              : 'Anmeldung über den TU-Wien-Login, wie bei der Moodle-App. Dein Passwort sieht und speichert sout nie.'}
+          </div>
+        </div>
+        <span className={`pill${tasks.connected && !tasks.expired ? ' ok' : tasks.expired ? ' warn' : ''}`}>
+          {tasks.expired ? 'abgelaufen' : tasks.connected ? 'verbunden' : 'nicht verbunden'}
+        </span>
+      </div>
+      <div className="form-row">
+        <button type="button" className={`button${tasks.connected && !tasks.expired ? ' secondary' : ''}`} disabled={busy} onClick={() => void login()}>
+          {busy ? <LoaderCircle size={14} className="spin" /> : <LogIn size={14} />} {tasks.connected ? 'Neu anmelden' : 'Bei TUWEL anmelden'}
+        </button>
+        {tasks.connected && (
+          <button type="button" className="button danger" disabled={busy} onClick={() => void window.sout.logoutTuwel()}>
+            <LogOut size={14} /> Abmelden
+          </button>
+        )}
+      </div>
+      {tasks.error && tasks.connected && <Callout kind={tasks.expired ? 'warn' : 'error'} title={tasks.error} />}
+      {error && <Callout kind="error" title="Anmeldung hat nicht geklappt.">{error}</Callout>}
+    </div>
+  )
+}
+
+function RemindersSection({ settings }: { settings: Settings }) {
+  const toggle = (minutes: number, on: boolean): void => {
+    const reminders = on ? [...settings.reminders, minutes] : settings.reminders.filter((value) => value !== minutes)
+    void window.sout.updateSettings({ reminders })
+  }
+  return (
+    <section className="section">
+      <h2>Erinnerungen</h2>
+      <div className="rows">
+        <div className="row column">
+          <div className="row-text">
+            <div className="row-title">Vor Abgaben und Tests erinnern</div>
+            <div className="row-desc">Als Benachrichtigung, solange sout läuft – auch im Hintergrund.</div>
+          </div>
+          <div className="reminder-choices">
+            {REMINDER_CHOICES.map((choice) => (
+              <label key={choice.minutes} className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={settings.reminders.includes(choice.minutes)}
+                  onChange={(event) => toggle(choice.minutes, event.target.checked)}
+                />
+                {choice.label} vorher
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
   )
 }

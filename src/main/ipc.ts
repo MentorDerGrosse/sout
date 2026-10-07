@@ -1,11 +1,12 @@
 import { app, ipcMain } from 'electron'
-import { IPC, isView, type AppInfo, type CoursePatch, type Result } from '../shared/types'
+import { IPC, isView, type AppInfo, type CoursePatch, type Result, type TodoInput } from '../shared/types'
 import { autostartFile, isAutostartEnabled, setAutostart } from './autostart'
 import { calendarData, clearCalendar, syncCalendar, updateCourse } from './calendar'
 import { launcherPath } from './paths'
 import { clearSecret, getSecret, secretsStatus, setSecret } from './secrets'
 import { getSettings, updateSettings } from './settings'
 import { trayHostAvailable, windowSystem } from './system'
+import { addTodo, deleteTodo, loginTuwel, logoutTuwel, setTaskDone, syncTasks, tasksData } from './tasks'
 import { parseTissToken, testTissFeed } from './tiss'
 import { refreshTrayMenu } from './tray'
 import { broadcast, hideMini, showMain } from './windows'
@@ -78,8 +79,12 @@ export function registerIpc(): void {
     }
   })
   ipcMain.handle(IPC.clearSecret, (_event, key: unknown) => {
-    if (key === 'tissToken' || key === 'tuwelToken') clearSecret(key)
-    if (key === 'tissToken') clearCalendar()
+    if (key === 'tissToken') {
+      clearSecret(key)
+      clearCalendar()
+    } else if (key === 'tuwelToken') {
+      logoutTuwel()
+    }
     changed()
     return secretsStatus()
   })
@@ -91,6 +96,41 @@ export function registerIpc(): void {
   ipcMain.handle(IPC.updateCourse, (_event, key: unknown, patch: unknown) => {
     if (typeof key === 'string' && patch && typeof patch === 'object') updateCourse(key, patch as CoursePatch)
     return calendarData()
+  })
+  ipcMain.handle(IPC.getTasks, () => tasksData())
+  ipcMain.handle(IPC.syncTasks, async () => {
+    await syncTasks()
+    return tasksData()
+  })
+  ipcMain.handle(IPC.loginTuwel, async () => {
+    try {
+      await loginTuwel()
+      changed()
+      return ok(tasksData())
+    } catch (error) {
+      return fail(error)
+    }
+  })
+  ipcMain.handle(IPC.logoutTuwel, () => {
+    logoutTuwel()
+    changed()
+    return tasksData()
+  })
+  ipcMain.handle(IPC.addTodo, (_event, input: unknown) => {
+    try {
+      addTodo((input ?? {}) as TodoInput)
+      return ok(tasksData())
+    } catch (error) {
+      return fail(error)
+    }
+  })
+  ipcMain.handle(IPC.setTaskDone, (_event, id: unknown, done: unknown) => {
+    if (typeof id === 'string') setTaskDone(id, done === true)
+    return tasksData()
+  })
+  ipcMain.handle(IPC.deleteTodo, (_event, id: unknown) => {
+    if (typeof id === 'string') deleteTodo(id)
+    return tasksData()
   })
   ipcMain.on(IPC.openMain, (_event, view: unknown) => {
     hideMini()

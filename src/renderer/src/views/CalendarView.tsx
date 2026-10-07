@@ -7,12 +7,14 @@ import deLocale from '@fullcalendar/core/locales/de'
 import type { EventContentArg, EventInput } from '@fullcalendar/core'
 import { CalendarDays, ExternalLink, MapPin, RefreshCw, X } from 'lucide-react'
 import type { CalendarData, CalendarEvent, EventKind, View } from '../../../shared/types'
+import { openTasks, taskCourse, useTasks } from '../lib/tasks'
 import { Callout } from '../components'
 import {
   courseMap,
   eventLabel,
   formatTime,
   HOLIDAY_COLOR,
+  isoDate,
   KIND_LABELS,
   mapsUrl,
   roomName,
@@ -22,16 +24,20 @@ import {
   visibleEvents
 } from '../lib/calendar'
 
-const KIND_FILTERS: { kind: EventKind; label: string }[] = [
+type Filter = EventKind | 'deadline'
+
+const KIND_FILTERS: { kind: Filter; label: string }[] = [
   { kind: 'course', label: 'Vorlesungen' },
   { kind: 'group', label: 'Gruppen' },
   { kind: 'exam', label: 'Prüfungen' },
-  { kind: 'holiday', label: 'vorlesungsfrei' }
+  { kind: 'deadline', label: 'Abgaben' },
+  { kind: 'holiday', label: 'Ferien' }
 ]
 
 export default function CalendarView({ onNavigate }: { onNavigate: (view: View) => void }) {
   const data = useCalendar()
-  const [hiddenKinds, setHiddenKinds] = useState<Set<EventKind>>(new Set())
+  const tasks = useTasks()
+  const [hiddenKinds, setHiddenKinds] = useState<Set<Filter>>(new Set())
   const [selected, setSelected] = useState<CalendarEvent | null>(null)
   if (!data) return null
 
@@ -79,7 +85,28 @@ export default function CalendarView({ onNavigate }: { onNavigate: (view: View) 
       }
     })
 
-  const toggleKind = (kind: EventKind): void => {
+  // Deadlines go into the all-day row of their day: "23:59 EP1 · Übungsblatt 2".
+  if (tasks && !hiddenKinds.has('deadline')) {
+    for (const task of openTasks(tasks)) {
+      if (!task.due || (task.courseKey && courses.get(task.courseKey)?.hidden)) continue
+      const due = new Date(task.due)
+      // Due at midnight belongs to the day before.
+      const day = new Date(due.getTime() - (due.getHours() === 0 && due.getMinutes() === 0 ? 60_000 : 0))
+      const course = taskCourse(task, data)
+      events.push({
+        id: `task:${task.id}`,
+        title: `${formatTime(task.due)} ${[course.name, task.title].filter(Boolean).join(' · ')}`,
+        start: isoDate(day),
+        allDay: true,
+        backgroundColor: course.color,
+        borderColor: course.color,
+        textColor: '#fff',
+        classNames: ['kind-deadline']
+      })
+    }
+  }
+
+  const toggleKind = (kind: Filter): void => {
     const next = new Set(hiddenKinds)
     if (next.has(kind)) next.delete(kind)
     else next.add(kind)
@@ -148,7 +175,10 @@ export default function CalendarView({ onNavigate }: { onNavigate: (view: View) 
           views={{ dayGridMonth: { dayMaxEvents: false } }}
           events={events}
           eventContent={renderEvent}
-          eventClick={(info) => setSelected(data.events.find((event) => event.id === info.event.id) ?? null)}
+          eventClick={(info) => {
+            if (info.event.id.startsWith('task:')) onNavigate('deadlines')
+            else setSelected(data.events.find((event) => event.id === info.event.id) ?? null)
+          }}
         />
       </div>
 

@@ -3,7 +3,7 @@
 Desktop-App fürs Studium an der TU Wien: Kalender aus TISS, Abgaben aus TUWEL, Notizen pro Fach.
 Läuft im Hintergrund weiter, mit einem kleinen Fenster oben rechts (wie die JetBrains Toolbox).
 
-Stand: Phase 1 (Kalender aus TISS). Plan, Entscheidungen und Hintergründe: [PLAN.md](PLAN.md).
+Stand: Phase 2 (Kalender aus TISS, Abgaben aus TUWEL). Plan, Entscheidungen und Hintergründe: [PLAN.md](PLAN.md).
 
 ## Voraussetzungen
 
@@ -43,15 +43,20 @@ npm run install-desktop    # Eintrag in der App-Übersicht + Befehl ~/.local/bin
 | `~/.config/sout/secrets.json` | Tokens, verschlüsselt (Schlüssel im GNOME-Schlüsselbund) |
 | `~/.config/sout/calendar.json` | zwischengespeicherte TISS-Termine |
 | `~/.config/sout/courses.json` | Kurznamen, Farben, ausgeblendete Fächer |
+| `~/.config/sout/tuwel.json` | zwischengespeicherte TUWEL-Abgaben und -Tests |
+| `~/.config/sout/todos.json` | eigene To-dos und in sout abgehakte TUWEL-Aufgaben |
+| `~/.config/sout/reminders.json` | welche Erinnerungen schon gezeigt wurden |
 | `~/.config/autostart/sout.desktop` | nur wenn Autostart an ist |
 
-## XWayland
+## Startschalter: XWayland und Deutsch
 
 sout läuft unter Linux über XWayland (`--ozone-platform=x11`), weil Wayland Apps ihre Fenster nicht selbst
-platzieren lässt – das Mini-Fenster muss aber oben rechts unter dem Tray-Symbol sitzen. Electron wählt das
-Anzeigesystem, bevor der App-Code läuft, deshalb muss der Schalter beim Start übergeben werden. Die npm-Skripte,
-der Befehl `sout` und der Autostart machen das automatisch; wird sout ohne den Schalter gestartet, startet es
-sich einmal selbst mit ihm neu.
+platzieren lässt – das Mini-Fenster muss aber oben rechts unter dem Tray-Symbol sitzen. Außerdem startet es mit
+`--lang=de-AT`, damit Datumsfelder und Menüs deutsch sind, auch wenn das System auf Englisch steht.
+
+Electron liest beide Schalter, bevor der App-Code läuft, deshalb müssen sie beim Start übergeben werden. Die
+npm-Skripte, der Befehl `sout` und der Autostart machen das automatisch; fehlen sie, startet sout sich einmal
+selbst mit ihnen neu.
 
 Die Zeile `GetVSyncParametersIfAvailable() failed for 1 times!` im Terminal ist harmlos.
 
@@ -59,7 +64,7 @@ Die Zeile `GetVSyncParametersIfAvailable() failed for 1 times!` im Terminal ist 
 
 ```sh
 npm run build
-node_modules/electron/dist/electron . --ozone-platform=x11 --smoke-test=/tmp/sout-smoke
+node_modules/electron/dist/electron . --ozone-platform=x11 --lang=de-AT --smoke-test=/tmp/sout-smoke
 ```
 
 Startet alles unsichtbar, legt Screenshots der Ansichten und `report.json` im angegebenen Ordner ab und beendet sich.
@@ -71,6 +76,8 @@ Hilfen für die Entwicklung (nur ungepackt):
 |---|---|
 | `--dump-tiss=<datei>` | speichert deinen TISS-Feed roh in eine Datei (zum Anschauen des Formats) |
 | `SOUT_TISS_FILE=<datei>` | liest den Kalender aus dieser Datei statt von TISS – z. B. für den Testlauf mit echten Daten |
+| `--dump-tuwel=<datei>` | speichert, was TUWEL liefert (Zeitleiste, Abgaben, Tests), als JSON |
+| `SOUT_TUWEL_FILE=<datei>` | nimmt diese JSON-Datei statt TUWEL |
 | `SOUT_SMOKE_THEME=light` | Testlauf im hellen statt dunklen Modus |
 
 ## Danke

@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import { IPC, type View } from '../shared/types'
 import { autostartEntry } from './autostart'
 import { startCalendarSync, syncCalendar } from './calendar'
+import { startTasksSync, syncTasks } from './tasks'
+import { fetchSnapshot } from './tuwelTasks'
 import { registerIpc } from './ipc'
 import { getSecret, secretsStatus } from './secrets'
 import { trayHostAvailable, windowSystem } from './system'
@@ -59,16 +61,19 @@ export async function runSmokeTest(dir: string): Promise<void> {
     Menu.setApplicationMenu(null)
     registerIpc()
     startCalendarSync(() => broadcast(IPC.calendarChanged))
-    await syncCalendar()
+    startTasksSync(() => broadcast(IPC.tasksChanged))
+    await Promise.all([syncCalendar(), syncTasks()])
     report['trayHost'] = await trayHostAvailable()
     createTray(report['trayHost'] as boolean | null)
     const mini = createMiniWindow()
     const main = createMainWindow('today', false)
+    // Hidden windows otherwise stop painting, and screenshots show an old frame.
+    for (const win of [mini, main]) win.webContents.setBackgroundThrottling(false)
     await Promise.all([loaded(mini), loaded(main)])
     await delay(1000)
 
     const screenshots: Record<string, string> = { mini: await screenshot(mini, dir, 'mini') }
-    for (const view of ['today', 'calendar', 'settings'] satisfies View[]) {
+    for (const view of ['today', 'calendar', 'deadlines', 'settings'] satisfies View[]) {
       main.webContents.send(IPC.navigate, view)
       await delay(500)
       screenshots[view] = await screenshot(main, dir, view)
@@ -86,8 +91,19 @@ export async function runSmokeTest(dir: string): Promise<void> {
       await delay(400)
       screenshots[view] = await screenshot(main, dir, view)
     }
+    main.webContents.send(IPC.navigate, 'deadlines')
+    await delay(400)
+    await click('.task-card:nth-of-type(1) .task-body')
+    await main.webContents.executeJavaScript(`[...document.querySelectorAll('.task-body')].find((b) => b.textContent.includes('Übungsblatt'))?.click()`)
+    await click('.header-actions .button:last-child')
+    // Clicks done through executeJavaScript take a moment to show up in a hidden window.
+    await delay(1500)
+    screenshots['deadlines-open'] = await screenshot(main, dir, 'deadlines-open')
     main.webContents.send(IPC.navigate, 'settings')
     await delay(400)
+    await main.webContents.executeJavaScript('document.querySelector(".reminder-choices")?.scrollIntoView()')
+    await delay(200)
+    screenshots['settings-middle'] = await screenshot(main, dir, 'settings-middle')
     await main.webContents.executeJavaScript('document.querySelector(".content").scrollTo(0, 1e6)')
     await delay(300)
     screenshots['settings-bottom'] = await screenshot(main, dir, 'settings-bottom')
@@ -114,6 +130,9 @@ function loaded(win: BrowserWindow): Promise<void> {
 
 async function screenshot(win: BrowserWindow, dir: string, name: string): Promise<string> {
   try {
+    // Hidden windows repaint lazily; ask for a fresh frame first.
+    win.webContents.invalidate()
+    await delay(250)
     const image = await win.webContents.capturePage()
     if (image.isEmpty()) return 'empty'
     writeFileSync(join(dir, `${name}.png`), image.toPNG())
@@ -141,5 +160,23 @@ export async function dumpTiss(file: string): Promise<void> {
     return
   }
   writeFileSync(file, await fetchTissFeed(token))
+  app.exit(0)
+}
+
+/** `--dump-tuwel=<file>` (development only): saves what TUWEL returns, for SOUT_TUWEL_FILE. */
+export function tuwelDumpFile(argv: string[]): string | null {
+  const arg = argv.find((value) => value.startsWith('--dump-tuwel='))
+  return arg && !app.isPackaged ? arg.slice('--dump-tuwel='.length) : null
+}
+
+export async function dumpTuwel(file: string): Promise<void> {
+  await app.whenReady()
+  const token = getSecret('tuwelToken')
+  if (!token) {
+    console.error('Nicht bei TUWEL angemeldet.')
+    app.exit(1)
+    return
+  }
+  writeFileSync(file, `${JSON.stringify(await fetchSnapshot(token), null, 2)}\n`)
   app.exit(0)
 }

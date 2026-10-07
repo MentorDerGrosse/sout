@@ -27,9 +27,9 @@ const electron = createRequire(import.meta.url)('electron')
 const shellQuote = (value) => `'${value.replaceAll("'", "'\\''")}'`
 const execQuote = (value) => (/^[\w\-./+=:@,]+$/.test(value) ? value : `"${value.replace(/(["`$\\])/g, '\\$1')}"`)
 
-// --ozone-platform=x11: run through XWayland so the mini window can be placed (see src/main/system.ts).
+// Startup flags: XWayland so the mini window can be placed, German UI (see src/main/system.ts).
 mkdirSync(dirname(launcher), { recursive: true })
-writeFileSync(launcher, `#!/bin/sh\nexec ${shellQuote(electron)} ${shellQuote(root)} --ozone-platform=x11 "$@"\n`)
+writeFileSync(launcher, `#!/bin/sh\nexec ${shellQuote(electron)} ${shellQuote(root)} --ozone-platform=x11 --lang=de-AT "$@"\n`)
 chmodSync(launcher, 0o755)
 
 mkdirSync(dirname(desktopFile), { recursive: true })

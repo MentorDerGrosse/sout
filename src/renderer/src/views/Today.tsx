@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 import { CalendarDays, Circle, CircleCheck, ClipboardList, Clock, PartyPopper } from 'lucide-react'
 import type { View } from '../../../shared/types'
 import { EventList } from '../EventList'
+import { TaskList } from '../TaskList'
+import { openTasks, useTasks } from '../lib/tasks'
 import { holidayOn, upcoming, useCalendar } from '../lib/calendar'
 import { formatLongDate, greeting } from '../lib/dates'
 import { useAppState, useNow } from '../lib/hooks'
@@ -12,6 +14,8 @@ export default function Today({ onNavigate }: { onNavigate: (view: View) => void
   const calendar = useCalendar()
   const next = calendar ? upcoming(calendar, now, 6) : []
   const holiday = calendar ? holidayOn(calendar, now) : undefined
+  const tasks = useTasks()
+  const due = tasks ? openTasks(tasks).slice(0, 5) : []
   const tissConnected = state?.secrets.tissToken ?? false
   const toSettings = (
     <button type="button" className="button small secondary" onClick={() => onNavigate('settings')}>
@@ -64,10 +68,27 @@ export default function Today({ onNavigate }: { onNavigate: (view: View) => void
           <h2 className="card-title">
             <ClipboardList size={16} /> Fällig
           </h2>
-          <div className="empty">
-            <strong>Noch keine Abgaben</strong>
-            <span>Abgaben und Tests aus TUWEL kommen in Phase 2.</span>
-          </div>
+          {due.length > 0 ? (
+            <>
+              <TaskList tasks={due} calendar={calendar} now={now} />
+              <button type="button" className="link" onClick={() => onNavigate('deadlines')}>
+                Alle Abgaben
+              </button>
+            </>
+          ) : tasks?.connected ? (
+            <div className="empty">
+              <strong>Nichts offen</strong>
+              <span>In TUWEL wartet gerade nichts auf dich.</span>
+            </div>
+          ) : (
+            <div className="empty">
+              <strong>Noch keine Abgaben</strong>
+              <span>Verbinde TUWEL, dann siehst du hier, was du noch abgeben musst.</span>
+              <button type="button" className="button small" onClick={() => onNavigate('deadlines')}>
+                TUWEL verbinden
+              </button>
+            </div>
+          )}
         </section>
 
         {state && (
@@ -96,7 +117,18 @@ export default function Today({ onNavigate }: { onNavigate: (view: View) => void
                 hint={tissConnected ? 'Der Token ist verschlüsselt gespeichert.' : 'In TISS unter Kalender ganz unten die Kalender-URL erzeugen.'}
                 action={tissConnected ? undefined : toSettings}
               />
-              <Step status="later" title="TUWEL verbunden" hint="Anmeldung über den TU-Login – kommt in Phase 2." />
+              <Step
+                status={tasks?.connected ? 'done' : 'todo'}
+                title="TUWEL verbunden"
+                hint={tasks?.connected ? `Angemeldet${tasks.user ? ` als ${tasks.user}` : ''}.` : 'Einmal über den TU-Wien-Login anmelden.'}
+                action={
+                  tasks?.connected ? undefined : (
+                    <button type="button" className="button small secondary" onClick={() => onNavigate('deadlines')}>
+                      Verbinden
+                    </button>
+                  )
+                }
+              />
             </ul>
           </section>
         )}

@@ -21,12 +21,21 @@ export function fixCursorSize(): void {
 }
 
 /**
- * Command line flags sout needs. Wayland doesn't let apps place their own windows, but the mini
- * window has to sit under the tray icon – through XWayland it can. Electron picks the display
- * backend before any of our code runs, so this only works as a real command line flag.
+ * Command line flags sout needs. Electron reads them before any of our code runs, so they only
+ * work as real command line flags (see index.ts).
+ * - XWayland: Wayland doesn't let apps place their own windows, but the mini window has to sit
+ *   under the tray icon.
+ * - German: date pickers, context menus etc. in German even if the system language is English.
  */
-export function displayArgs(): string[] {
-  return process.platform === 'linux' && process.env['DISPLAY'] ? [X11_FLAG] : []
+export function startupArgs(): string[] {
+  const args = ['--lang=de-AT']
+  if (process.platform === 'linux' && process.env['DISPLAY']) args.unshift(X11_FLAG)
+  return args
+}
+
+/** The startup flags not given on this command line (an explicit other value counts as given). */
+export function missingStartupArgs(argv: string[]): string[] {
+  return startupArgs().filter((arg) => !argv.some((given) => given.startsWith(`${arg.split('=')[0]}=`)))
 }
 
 /**
