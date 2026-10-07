@@ -390,6 +390,17 @@ function RemindersSection({ settings }: { settings: Settings }) {
             ))}
           </div>
         </div>
+        <div className="row">
+          <div className="row-text">
+            <div className="row-title">Bescheid geben, sobald etwas aufmacht</div>
+            <div className="row-desc">Wenn ein Test oder eine Abgabe in TUWEL freigeschaltet wird.</div>
+          </div>
+          <Toggle
+            label="Bescheid geben, sobald etwas aufmacht"
+            checked={settings.notifyOpening}
+            onChange={(value) => void window.sout.updateSettings({ notifyOpening: value })}
+          />
+        </div>
       </div>
     </section>
   )

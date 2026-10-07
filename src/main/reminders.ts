@@ -21,16 +21,29 @@ export function startReminders(): void {
   setInterval(check, 60_000)
 }
 
+/** Opening notices only for things that opened in the last two hours (not after a long pause). */
+const OPENED_WINDOW_MS = 2 * 60 * 60_000
+
 function check(): void {
   if (!Notification.isSupported()) return
-  const offsets = [...getSettings().reminders].sort((a, b) => b - a)
-  if (offsets.length === 0) return
+  const settings = getSettings()
+  const offsets = [...settings.reminders].sort((a, b) => b - a)
   const shown = (readJson(file()) ?? {}) as Shown
   const now = Date.now()
   let changed = false
 
   for (const task of tasksData().tasks) {
-    if (task.status === 'done' || !task.due) continue
+    if (task.status === 'done') continue
+    if (settings.notifyOpening && task.opens) {
+      const opens = Date.parse(task.opens)
+      const key = `${task.id}|opens|${task.opens}`
+      if (opens <= now && now - opens < OPENED_WINDOW_MS && !shown[key]) {
+        notifyOpened(task)
+        shown[key] = task.opens
+        changed = true
+      }
+    }
+    if (!task.due || offsets.length === 0) continue
     const due = Date.parse(task.due)
     if (due <= now) continue
     // Reminder times already reached; after a longer pause only the most urgent one is shown.
@@ -63,6 +76,22 @@ function notify(task: Task, remainingMs: number): void {
   const notification = new Notification({
     title: `${task.title} – noch ${remaining(remainingMs)}`,
     body: `${[course ?? task.courseName, task.kindLabel].filter(Boolean).join(' · ')} ${task.dueLabel} ${timeFormat.format(new Date(task.due!))}`,
+    icon: resourcePath('icon.png')
+  })
+  notification.on('click', () => showMain('deadlines'))
+  notification.show()
+}
+
+function notifyOpened(task: Task): void {
+  const course = task.courseKey ? calendarData().courses.find((c) => c.key === task.courseKey)?.shortName : null
+  const notification = new Notification({
+    title: `${task.title} ist jetzt offen`,
+    body: [
+      [course ?? task.courseName, task.kindLabel].filter(Boolean).join(' · '),
+      task.due ? `${task.dueLabel} ${timeFormat.format(new Date(task.due))}` : null
+    ]
+      .filter(Boolean)
+      .join(' – '),
     icon: resourcePath('icon.png')
   })
   notification.on('click', () => showMain('deadlines'))

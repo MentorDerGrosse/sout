@@ -34,13 +34,14 @@ interface MoodleActionEvent {
   overdue?: boolean
   url?: string
   course?: MoodleCourse
-  action?: { name: string; url: string }
+  action?: { name: string; url: string; actionable?: boolean }
 }
 
 interface MoodleAssignment {
   id: number
   name: string
   intro?: string
+  duedate: number
   cutoffdate: number
   allowsubmissionsfromdate: number
   configs?: { plugin: string; subtype: string; name: string; value: string }[]
@@ -51,6 +52,7 @@ interface MoodleQuiz {
   name: string
   intro?: string
   timeopen: number
+  timeclose: number
   timelimit: number
 }
 
@@ -141,24 +143,37 @@ export function toTasks(snapshot: MoodleSnapshot): Task[] {
   const assignments = new Map(snapshot.assignments.map((assignment) => [assignment.id, assignment]))
   const quizzes = new Map(snapshot.quizzes.map((quiz) => [quiz.id, quiz]))
 
-  return snapshot.events.map((event): Task => {
+  // The timeline lists opening and closing of an activity as two events ("öffnet", "schließt");
+  // they become one task.
+  const activities = new Map<string, MoodleActionEvent[]>()
+  for (const event of snapshot.events) {
+    const key = event.modulename && event.instance ? `${event.modulename}:${event.instance}` : `event:${event.id}`
+    activities.set(key, [...(activities.get(key) ?? []), event])
+  }
+
+  return [...activities.values()].map((events): Task => {
+    const opening = events.find((event) => event.eventtype === 'open')
+    const closing = events.find((event) => event.eventtype !== 'open')
+    const event = closing ?? opening!
     const module = event.modulename ?? null
     const assignment = module === 'assign' && event.instance ? assignments.get(event.instance) : undefined
     const quiz = module === 'quiz' && event.instance ? quizzes.get(event.instance) : undefined
     const status = module === 'assign' && event.instance ? snapshot.submissions[event.instance] : undefined
-    const opens = quiz?.timeopen || assignment?.allowsubmissionsfromdate || 0
+    const opens = opening?.timesort || quiz?.timeopen || assignment?.allowsubmissionsfromdate || 0
+    const due = closing?.timesort || quiz?.timeclose || assignment?.duedate || 0
     return {
       id: `tuwel:${event.id}`,
       source: 'tuwel',
       title: cleanText(event.activityname || event.name),
       kindLabel: (module && MODULES[module]) || event.activitystr || 'Aktivität',
       module,
-      dueLabel: EVENT_TYPES[event.eventtype] ?? 'fällig',
+      dueLabel: closing ? (EVENT_TYPES[closing.eventtype] ?? 'fällig') : module === 'quiz' ? 'schließt' : 'fällig',
       courseKey: event.course ? lvaNumber(event.course) : null,
       courseName: event.course ? cleanText(event.course.fullname) : null,
-      due: isoTime(event.timesort),
+      due: due ? isoTime(due) : null,
       cutoff: assignment?.cutoffdate ? isoTime(assignment.cutoffdate) : null,
       opens: opens ? isoTime(opens) : null,
+      actionable: event.action ? event.action.actionable !== false : null,
       timeLimitMinutes: quiz?.timelimit ? Math.round(quiz.timelimit / 60) : null,
       description: htmlToText(assignment?.intro || quiz?.intro || event.description || '') || null,
       submission: assignment ? submissionTypes(assignment) : [],

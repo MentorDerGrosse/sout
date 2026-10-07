@@ -1,7 +1,7 @@
 import { CalendarDays, ClipboardList, Maximize2, Settings } from 'lucide-react'
 import { EventList } from './EventList'
 import { TaskList } from './TaskList'
-import { openTasks, useTasks } from './lib/tasks'
+import { nextUp, useTasks } from './lib/tasks'
 import { upcoming, useCalendar } from './lib/calendar'
 import { formatShortDate } from './lib/dates'
 import { useAppState, useNow } from './lib/hooks'
@@ -14,7 +14,7 @@ export default function Mini() {
   const calendar = useCalendar()
   const next = calendar ? upcoming(calendar, now, 4) : []
   const tasks = useTasks()
-  const due = tasks ? openTasks(tasks).slice(0, 3) : []
+  const due = tasks ? nextUp(tasks, now, 3) : []
 
   return (
     <div className="mini">

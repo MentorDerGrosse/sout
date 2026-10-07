@@ -7,10 +7,10 @@ import { readJson, writeJson } from './jsonFile'
 // The file only ever holds ciphertext (base64), and decrypted values never leave the main process.
 type Store = Partial<Record<SecretKey, string>>
 
-const file = (): string => join(app.getPath('userData'), 'secrets.json')
+const file = (userData = app.getPath('userData')): string => join(userData, 'secrets.json')
 
-function load(): Store {
-  const data = readJson(file())
+function load(userData?: string): Store {
+  const data = readJson(file(userData))
   return data && typeof data === 'object' ? (data as Store) : {}
 }
 
@@ -38,8 +38,9 @@ export function hasSecret(key: SecretKey): boolean {
   return Boolean(load()[key])
 }
 
-export function getSecret(key: SecretKey): string | null {
-  const encrypted = load()[key]
+/** `userData`: read another profile folder's secrets (the development dump tools use that). */
+export function getSecret(key: SecretKey, userData?: string): string | null {
+  const encrypted = load(userData)[key]
   if (!encrypted) return null
   try {
     return safeStorage.decryptString(Buffer.from(encrypted, 'base64'))

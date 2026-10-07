@@ -1,10 +1,10 @@
 import { useState, type FormEvent } from 'react'
-import { ChevronDown, ExternalLink, LogIn, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { ChevronDown, ExternalLink, LockKeyhole, LogIn, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import type { CalendarData, Task, TasksData } from '../../../shared/types'
 import { Callout } from '../components'
 import { useCalendar } from '../lib/calendar'
 import { useNow } from '../lib/hooks'
-import { dueText, GROUP_LABELS, groupTasks, remainingText, taskCourse, useTasks } from '../lib/tasks'
+import { dueText, GROUP_LABELS, groupTasks, isUrgent, opensLater, opensText, remainingText, splitTasks, taskCourse, useTasks } from '../lib/tasks'
 
 const syncFormat = new Intl.DateTimeFormat('de-AT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 
@@ -16,8 +16,7 @@ export default function DeadlinesView() {
   const [showDone, setShowDone] = useState(false)
   if (!data) return null
 
-  const groups = groupTasks(data.tasks, now)
-  const open = data.tasks.filter((task) => task.status !== 'done')
+  const { open, later, done } = splitTasks(data.tasks, now)
 
   return (
     <>
@@ -44,7 +43,7 @@ export default function DeadlinesView() {
 
       {adding && <TodoForm calendar={calendar} onDone={() => setAdding(false)} />}
 
-      {open.length === 0 && data.connected && !data.syncing && (
+      {open.length === 0 && later.length === 0 && data.connected && !data.syncing && (
         <section className="card">
           <div className="empty">
             <strong>Nichts offen</strong>
@@ -53,24 +52,43 @@ export default function DeadlinesView() {
         </section>
       )}
 
-      {groups.map(({ key, tasks }) =>
-        key === 'done' ? (
-          <section key={key} className="task-group">
-            <button type="button" className="group-toggle" aria-expanded={showDone} onClick={() => setShowDone(!showDone)}>
-              <ChevronDown size={14} className={showDone ? '' : 'rotated'} /> {GROUP_LABELS[key]} ({tasks.length})
-            </button>
-            {showDone && tasks.map((task) => <TaskCard key={task.id} task={task} calendar={calendar} now={now} />)}
-          </section>
-        ) : (
-          <section key={key} className="task-group">
-            <h2 className={key === 'overdue' ? 'overdue' : undefined}>
-              {GROUP_LABELS[key]} <span className="group-count">{tasks.length}</span>
-            </h2>
-            {tasks.map((task) => (
-              <TaskCard key={task.id} task={task} calendar={calendar} now={now} />
-            ))}
-          </section>
-        )
+      {open.length > 0 && (
+        <section className="task-section">
+          <h2>
+            Jetzt offen <span className="group-count">{open.length}</span>
+          </h2>
+          <p className="section-hint">Kannst du jetzt erledigen – das Dringendste zuerst.</p>
+          {/* Day labels inside, so the order stays "most urgent first". */}
+          {groupTasks(open, now).map(({ key, tasks }) => (
+            <div key={key} className="task-day">
+              <div className={`task-day-label${key === 'overdue' ? ' overdue' : ''}`}>{GROUP_LABELS[key]}</div>
+              {tasks.map((task) => (
+                <TaskCard key={task.id} task={task} calendar={calendar} now={now} />
+              ))}
+            </div>
+          ))}
+        </section>
+      )}
+
+      {later.length > 0 && (
+        <section className="task-section">
+          <h2>
+            Noch nicht offen <span className="group-count">{later.length}</span>
+          </h2>
+          <p className="section-hint">Kannst du noch nicht abgeben – sortiert danach, was zuerst aufmacht.</p>
+          {later.map((task) => (
+            <TaskCard key={task.id} task={task} calendar={calendar} now={now} />
+          ))}
+        </section>
+      )}
+
+      {done.length > 0 && (
+        <section className="task-section">
+          <button type="button" className="group-toggle" aria-expanded={showDone} onClick={() => setShowDone(!showDone)}>
+            <ChevronDown size={14} className={showDone ? '' : 'rotated'} /> Erledigt ({done.length})
+          </button>
+          {showDone && done.map((task) => <TaskCard key={task.id} task={task} calendar={calendar} now={now} />)}
+        </section>
       )}
     </>
   )
@@ -165,10 +183,11 @@ function TaskCard({ task, calendar, now }: { task: Task; calendar: CalendarData 
   const course = taskCourse(task, calendar)
   const done = task.status === 'done'
   const overdue = !done && Boolean(task.due && new Date(task.due) < now)
-  const opensLater = task.opens && new Date(task.opens) > now
+  const notYet = opensLater(task, now)
+  const urgent = !done && !notYet && isUrgent(task, now)
 
   return (
-    <article className={`task-card${done ? ' done' : ''}${expanded ? ' expanded' : ''}`}>
+    <article className={`task-card${done ? ' done' : ''}${notYet ? ' not-yet' : ''}${expanded ? ' expanded' : ''}`}>
       <span className="event-bar" style={{ background: course.color }} />
       <input
         type="checkbox"
@@ -181,14 +200,25 @@ function TaskCard({ task, calendar, now }: { task: Task; calendar: CalendarData 
       <button type="button" className="task-body" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
         <span className="task-head">
           <span className="task-title">{task.title}</span>
-          {task.due && <span className={`task-when${overdue ? ' overdue' : ''}`}>{dueText(task.due, now)}</span>}
+          {notYet ? (
+            <span className="task-when opens">
+              <LockKeyhole size={12} /> {opensText(task, now)}
+            </span>
+          ) : (
+            task.due && <span className={`task-when${overdue ? ' overdue' : urgent ? ' urgent' : ''}`}>{dueText(task.due, now)}</span>
+          )}
         </span>
         <span className="task-head">
           <span className="task-meta">
             {[course.name, task.kindLabel].filter(Boolean).join(' · ')}
             {task.status === 'draft' && <span className="pill warn">Entwurf, noch nicht abgegeben</span>}
           </span>
-          {task.due && !done && <span className={`task-remaining${overdue ? ' overdue' : ''}`}>{remainingText(task.due, now)}</span>}
+          {notYet
+            ? task.due && <span className="task-remaining">{`${task.dueLabel} ${dueText(task.due, now)}`}</span>
+            : task.due &&
+              !done && (
+                <span className={`task-remaining${overdue ? ' overdue' : urgent ? ' urgent' : ''}`}>{remainingText(task.due, now)}</span>
+              )}
         </span>
       </button>
 
@@ -207,10 +237,10 @@ function TaskCard({ task, calendar, now }: { task: Task; calendar: CalendarData 
                 <dd>{longFormat.format(new Date(task.cutoff))}</dd>
               </>
             )}
-            {opensLater && (
+            {task.opens && (
               <>
-                <dt>Ab</dt>
-                <dd>{longFormat.format(new Date(task.opens!))}</dd>
+                <dt>{notYet ? 'Öffnet' : 'Offen seit'}</dt>
+                <dd>{longFormat.format(new Date(task.opens))}</dd>
               </>
             )}
             {task.timeLimitMinutes && (

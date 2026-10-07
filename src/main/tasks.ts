@@ -90,6 +90,7 @@ function todoTask(todo: Todo): Task {
     due: todo.due,
     cutoff: null,
     opens: null,
+    actionable: null,
     timeLimitMinutes: null,
     description: null,
     submission: [],

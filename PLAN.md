@@ -92,11 +92,12 @@ Dazu:
 
 - [x] TU-Login in eigenem Fenster wie die Moodle-App: `admin/tool/mobile/launch.php` → TU-Wien-Login → `moodlemobile://token=…` (Signatur geprüft), Token verschlüsselt gespeichert
 - [x] Daten über die Moodle-Schnittstelle: Zeitleiste (`core_calendar_get_action_events_by_timesort`), Abgaben (`mod_assign_get_assignments`, `mod_assign_get_submission_status`), Tests (`mod_quiz_get_quizzes_by_courses`); Sync beim Start, alle 30 Minuten, nach dem Aufwachen
-- [x] Seite „Abgaben“: überfällig / heute / morgen / diese Woche / später / ohne Termin / erledigt
+- [x] Seite „Abgaben“ in zwei Teilen: „Jetzt offen“ (das Dringendste zuerst, mit Tagesüberschriften) und „Noch nicht offen“ (mit „öffnet …“, sortiert nach Öffnungszeit); dazu „Erledigt“
+- [x] TUWEL meldet Öffnen und Schließen eines Tests als zwei Einträge – sout macht daraus eine Aufgabe
 - [x] Pro Eintrag: was (Titel, Beschreibung), bis wann (Countdown, letzte Abgabemöglichkeit), wie (Datei-Upload, Online-Text, Dateitypen, Zeitlimit), wo (Direktlink zur Aktivität), Status (offen / Entwurf)
 - [x] Abgegebenes verschwindet automatisch (TUWEL-Zeitleiste); in sout abhaken; eigene To-dos mit Datum und Fach
 - [x] Deadlines im Kalender (ganztägige Zeile), auf „Heute“ und im Mini-Fenster
-- [x] Erinnerungen als Benachrichtigung, einstellbar: 3 Tage / 1 Tag / 3 Stunden / 1 Stunde vorher
+- [x] Erinnerungen als Benachrichtigung, einstellbar: 3 Tage / 1 Tag / 3 Stunden / 1 Stunde vorher; dazu „jetzt offen“, sobald etwas aufmacht (abschaltbar)
 - [ ] Mit echtem TUWEL-Login testen und die Daten prüfen (`--dump-tuwel`)
 - später: Kreuzerlübungen genauer (was ist angekreuzt), Terminbuchungen für Abgabegespräche, Noten und Feedback, Forum-Ankündigungen, Meldung bei neuen Aufgaben, Raum bei Präsenztests aus TISS
 

@@ -3,7 +3,7 @@ import { CalendarDays, Circle, CircleCheck, ClipboardList, Clock, PartyPopper } 
 import type { View } from '../../../shared/types'
 import { EventList } from '../EventList'
 import { TaskList } from '../TaskList'
-import { openTasks, useTasks } from '../lib/tasks'
+import { nextUp, useTasks } from '../lib/tasks'
 import { holidayOn, upcoming, useCalendar } from '../lib/calendar'
 import { formatLongDate, greeting } from '../lib/dates'
 import { useAppState, useNow } from '../lib/hooks'
@@ -15,7 +15,7 @@ export default function Today({ onNavigate }: { onNavigate: (view: View) => void
   const next = calendar ? upcoming(calendar, now, 6) : []
   const holiday = calendar ? holidayOn(calendar, now) : undefined
   const tasks = useTasks()
-  const due = tasks ? openTasks(tasks).slice(0, 5) : []
+  const due = tasks ? nextUp(tasks, now, 5) : []
   const tissConnected = state?.secrets.tissToken ?? false
   const toSettings = (
     <button type="button" className="button small secondary" onClick={() => onNavigate('settings')}>

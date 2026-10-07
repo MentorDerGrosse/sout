@@ -1464,3 +1464,63 @@ select.input {
 .fc .kind-deadline {
   border-left-width: 3px;
 }
+
+/* ---------- Open / not yet open ---------- */
+
+.task-section {
+  margin-bottom: 26px;
+}
+
+.task-section > h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 2px 4px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.task-section > .section-hint {
+  margin: 0 4px 12px;
+}
+
+.task-day {
+  margin-bottom: 10px;
+}
+
+.task-day-label {
+  margin: 0 0 6px 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.task-day-label.overdue {
+  color: var(--danger);
+}
+
+.urgent,
+.task-when.urgent,
+.task-due.urgent,
+.task-remaining.urgent {
+  color: var(--warn);
+}
+
+.task-when.opens,
+.task-due.opens {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent);
+}
+
+.task-due.opens {
+  display: flex;
+}
+
+.task-card.not-yet .task-title,
+.task-row.not-yet .task-title {
+  color: var(--text-muted);
+}

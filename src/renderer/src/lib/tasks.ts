@@ -15,6 +15,30 @@ export function useTasks(): TasksData | null {
 
 export const openTasks = (data: TasksData): Task[] => data.tasks.filter((task) => task.status !== 'done')
 
+/** Not possible yet: it opens later (or TUWEL says it can't be done yet and doesn't say when). */
+export function opensLater(task: Task, now: Date): boolean {
+  if (task.status === 'done') return false
+  if (task.opens) return new Date(task.opens) > now
+  return task.actionable === false && Boolean(task.due && new Date(task.due) > now)
+}
+
+const byDue = (a: Task, b: Task): number => (a.due ?? '9999').localeCompare(b.due ?? '9999')
+const byOpening = (a: Task, b: Task): number => (a.opens ?? a.due ?? '9999').localeCompare(b.opens ?? b.due ?? '9999')
+
+/** What can be done now (most urgent first), what opens later (soonest first), what is done. */
+export function splitTasks(tasks: Task[], now: Date): { open: Task[]; later: Task[]; done: Task[] } {
+  const done = tasks.filter((task) => task.status === 'done')
+  const later = tasks.filter((task) => opensLater(task, now)).sort(byOpening)
+  const open = tasks.filter((task) => task.status !== 'done' && !opensLater(task, now)).sort(byDue)
+  return { open, later, done }
+}
+
+/** For short lists ("Heute", mini window): first what can be done now, then what opens next. */
+export function nextUp(data: TasksData, now: Date, limit: number): Task[] {
+  const { open, later } = splitTasks(data.tasks, now)
+  return [...open, ...later].slice(0, limit)
+}
+
 /** Colour and short name of the course from the TISS calendar; otherwise the TUWEL course name. */
 export function taskCourse(task: Task, calendar: CalendarData | null): { name: string | null; color: string } {
   const course = task.courseKey ? calendar?.courses.find((c) => c.key === task.courseKey) : undefined
@@ -73,6 +97,18 @@ export function dueText(iso: string, now: Date): string {
   if (day === isoDate(now)) return `heute, ${time.format(date)}`
   if (day === isoDate(addDays(now, 1))) return `morgen, ${time.format(date)}`
   return dayAndTime.format(date)
+}
+
+/** "öffnet morgen, 10:00" – or "noch nicht freigeschaltet" when TUWEL doesn't say when. */
+export function opensText(task: Task, now: Date): string {
+  return task.opens ? `öffnet ${dueText(task.opens, now)}` : 'noch nicht freigeschaltet'
+}
+
+/** Due within a day: worth a colour. */
+export function isUrgent(task: Task, now: Date): boolean {
+  if (!task.due) return false
+  const ms = new Date(task.due).getTime() - now.getTime()
+  return ms >= 0 && ms < 24 * 60 * 60_000
 }
 
 /** "in 45 min", "in 5 h", "in 3 Tagen", "seit 2 Tagen überfällig". */

@@ -16,6 +16,8 @@ export interface Settings {
   closeHintShown: boolean
   /** Remind about deadlines this many minutes before they are due. */
   reminders: number[]
+  /** Notify when an assignment or test opens. */
+  notifyOpening: boolean
 }
 
 /** Reminder times offered in the settings: minutes before a deadline → label. */
@@ -121,8 +123,10 @@ export interface Task {
   due: string | null
   /** Last possible submission (Moodle "cut-off date"). */
   cutoff: string | null
-  /** When the activity opens (quizzes, assignments that aren't open yet). */
+  /** When the activity opens (tests, assignments) – in the future means it can't be done yet. */
   opens: string | null
+  /** TUWEL says the next step is possible right now (false e.g. before it opens); null if unknown. */
+  actionable: boolean | null
   timeLimitMinutes: number | null
   description: string | null
   /** How to hand in, e.g. "Datei-Upload (max. 1 Datei)", "Online-Text". */

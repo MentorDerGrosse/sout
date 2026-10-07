@@ -1,10 +1,11 @@
 import { app, BrowserWindow, Menu, nativeTheme, screen } from 'electron'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { IPC, type View } from '../shared/types'
 import { autostartEntry } from './autostart'
 import { startCalendarSync, syncCalendar } from './calendar'
 import { startTasksSync, syncTasks } from './tasks'
+import { TuwelError } from './tuwelApi'
 import { fetchSnapshot } from './tuwelTasks'
 import { registerIpc } from './ipc'
 import { getSecret, secretsStatus } from './secrets'
@@ -93,6 +94,10 @@ export async function runSmokeTest(dir: string): Promise<void> {
     }
     main.webContents.send(IPC.navigate, 'deadlines')
     await delay(400)
+    await main.webContents.executeJavaScript(`[...document.querySelectorAll('.task-section')].at(1)?.scrollIntoView()`)
+    await delay(1500)
+    screenshots['deadlines-later'] = await screenshot(main, dir, 'deadlines-later')
+    await main.webContents.executeJavaScript('document.querySelector(".content").scrollTo(0, 0)')
     await click('.task-card:nth-of-type(1) .task-body')
     await main.webContents.executeJavaScript(`[...document.querySelectorAll('.task-body')].find((b) => b.textContent.includes('Übungsblatt'))?.click()`)
     await click('.header-actions .button:last-child')
@@ -145,6 +150,21 @@ async function screenshot(win: BrowserWindow, dir: string, name: string): Promis
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
+/**
+ * The dump tools run next to a running sout: a temporary profile folder of their own (two
+ * processes on one profile block each other), but the encrypted tokens from the real one.
+ */
+function useOwnProfile(): { realUserData: string; done: () => void } {
+  const realUserData = app.getPath('userData')
+  // Chromium may still write into the folder while exiting; clean up leftovers of earlier runs.
+  for (const entry of readdirSync(app.getPath('temp'))) {
+    if (entry.startsWith('sout-dump-')) rmSync(join(app.getPath('temp'), entry), { recursive: true, force: true })
+  }
+  const temp = join(app.getPath('temp'), `sout-dump-${process.pid}`)
+  app.setPath('userData', temp)
+  return { realUserData, done: () => rmSync(temp, { recursive: true, force: true }) }
+}
+
 /** `--dump-tiss=<file>` (development only): saves the raw TISS feed, to look at its format. */
 export function tissDumpFile(argv: string[]): string | null {
   const arg = argv.find((value) => value.startsWith('--dump-tiss='))
@@ -152,15 +172,13 @@ export function tissDumpFile(argv: string[]): string | null {
 }
 
 export async function dumpTiss(file: string): Promise<void> {
+  const profile = useOwnProfile()
   await app.whenReady()
-  const token = getSecret('tissToken')
-  if (!token) {
-    console.error('Kein TISS-Token gespeichert.')
-    app.exit(1)
-    return
-  }
-  writeFileSync(file, await fetchTissFeed(token))
-  app.exit(0)
+  const token = getSecret('tissToken', profile.realUserData)
+  if (token) writeFileSync(file, await fetchTissFeed(token))
+  else console.error('Kein TISS-Token gespeichert.')
+  profile.done()
+  app.exit(token ? 0 : 1)
 }
 
 /** `--dump-tuwel=<file>` (development only): saves what TUWEL returns, for SOUT_TUWEL_FILE. */
@@ -170,13 +188,21 @@ export function tuwelDumpFile(argv: string[]): string | null {
 }
 
 export async function dumpTuwel(file: string): Promise<void> {
+  const profile = useOwnProfile()
   await app.whenReady()
-  const token = getSecret('tuwelToken')
-  if (!token) {
-    console.error('Nicht bei TUWEL angemeldet.')
-    app.exit(1)
-    return
+  const token = getSecret('tuwelToken', profile.realUserData)
+  let code = 0
+  try {
+    if (!token) throw new Error('Nicht bei TUWEL angemeldet.')
+    // Only the shape, never the token itself: Moodle tokens are 32 hex characters.
+    console.error(`[dump] token: ${token.length} characters, hex: ${/^[0-9a-f]+$/.test(token)}`)
+    writeFileSync(file, `${JSON.stringify(await fetchSnapshot(token), null, 2)}\n`)
+    console.error(`[dump] saved ${file}`)
+  } catch (error) {
+    console.error('[dump] failed:', error instanceof TuwelError ? `${error.code}: ${error.message}` : error)
+    code = 1
+  } finally {
+    profile.done()
+    app.exit(code)
   }
-  writeFileSync(file, `${JSON.stringify(await fetchSnapshot(token), null, 2)}\n`)
-  app.exit(0)
 }
