@@ -3,7 +3,7 @@ import { AUTOSTART_ARG } from './autostart'
 import { registerIpc } from './ipc'
 import { getSettings } from './settings'
 import { runSmokeTest, smokeTestDir } from './smoke'
-import { displayArgs, trayHostAvailable } from './system'
+import { displayArgs, fixCursorSize, trayHostAvailable } from './system'
 import { createTray, ensureTray } from './tray'
 import { createMiniWindow, notifyRunningInBackground, setOnMainClosed, showMain, toggleMini } from './windows'
 
@@ -18,6 +18,8 @@ const restartWithFlags =
   displayArgs().length > 0 &&
   !process.argv.some((arg) => arg.startsWith('--ozone-platform=')) &&
   !process.env['ELECTRON_RENDERER_URL']
+
+fixCursorSize()
 
 const smokeDir = smokeTestDir(process.argv)
 

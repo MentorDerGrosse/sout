@@ -1,8 +1,24 @@
 import { app } from 'electron'
-import { execFile } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
 import type { AppInfo } from '../shared/types'
 
 export const X11_FLAG = '--ozone-platform=x11'
+
+/**
+ * Under XWayland with fractional scaling, X11 apps draw at 2x and GNOME scales them down. Chromium
+ * then loads the mouse cursor at the unscaled size, so it shrinks over our windows. GNOME publishes
+ * the right X11 size as the Xcursor.size resource; hand it to Chromium via XCURSOR_SIZE.
+ */
+export function fixCursorSize(): void {
+  if (process.env['XCURSOR_SIZE'] || !process.argv.includes(X11_FLAG)) return
+  try {
+    const resources = execFileSync('xrdb', ['-query'], { encoding: 'utf8', timeout: 2000 })
+    const size = /^Xcursor\.size:\s*(\d+)/m.exec(resources)?.[1]
+    if (size) process.env['XCURSOR_SIZE'] = size
+  } catch {
+    // No xrdb: keep Chromium's default size.
+  }
+}
 
 /**
  * Command line flags sout needs. Wayland doesn't let apps place their own windows, but the mini
