@@ -1,5 +1,5 @@
 import { app, BrowserWindow, Menu, nativeTheme, screen } from 'electron'
-import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { IPC, type View } from '../shared/types'
 import { autostartEntry } from './autostart'
@@ -7,6 +7,7 @@ import { startCalendarSync, syncCalendar } from './calendar'
 import { startTasksSync, syncTasks } from './tasks'
 import { readJson } from './jsonFile'
 import { TuwelError, tuwelCall } from './tuwelApi'
+import { lastLoginTrace, trySilent } from './tuwelLogin'
 import { fetchSnapshot } from './tuwelTasks'
 import { registerIpc } from './ipc'
 import { getSecret, secretsStatus } from './secrets'
@@ -228,6 +229,29 @@ export async function probeTuwel(): Promise<void> {
     result = error instanceof TuwelError ? `abgelehnt (${error.code}): ${error.message}` : String(error)
   }
   console.log(`[probe] ${new Date().toISOString()} ${result} – Schlüssel-Alter: ${age ?? '?'} min`)
+  profile.done()
+  app.exit(0)
+}
+
+/** `--try-renewal[=session|sso]` (development only): one silent token attempt with a copy of the stored login. */
+export function tryRenewalArg(argv: string[]): 'session' | 'sso' | null {
+  const arg = argv.find((value) => value === '--try-renewal' || value.startsWith('--try-renewal='))
+  if (!arg || app.isPackaged) return null
+  return arg.endsWith('=sso') ? 'sso' : 'session'
+}
+
+export async function tryRenewal(via: 'session' | 'sso'): Promise<void> {
+  const profile = useOwnProfile()
+  // A copy of the stored login cookies; the running app keeps using its own.
+  cpSync(join(profile.realUserData, 'Partitions', 'tuwel'), join(app.getPath('userData'), 'Partitions', 'tuwel'), { recursive: true })
+  await app.whenReady()
+  try {
+    await trySilent(via)
+    console.log(`[renewal] ${via}: Token erhalten`)
+  } catch (error) {
+    console.log(`[renewal] ${via}: fehlgeschlagen – ${error instanceof Error ? error.message : String(error)}`)
+  }
+  for (const line of lastLoginTrace()) console.log(`[renewal]   ${line}`)
   profile.done()
   app.exit(0)
 }

@@ -5,7 +5,7 @@ import { startCalendarSync } from './calendar'
 import { startReminders } from './reminders'
 import { registerIpc } from './ipc'
 import { getSettings } from './settings'
-import { dumpTiss, dumpTuwel, isTuwelProbe, probeTuwel, runSmokeTest, smokeTestDir, tissDumpFile, tuwelDumpFile } from './smoke'
+import { dumpTiss, dumpTuwel, isTuwelProbe, probeTuwel, runSmokeTest, smokeTestDir, tissDumpFile, tryRenewal, tryRenewalArg, tuwelDumpFile } from './smoke'
 import { fixCursorSize, missingStartupArgs, trayHostAvailable } from './system'
 import { startTasksSync } from './tasks'
 import { createTray, ensureTray } from './tray'
@@ -37,6 +37,8 @@ if (missingArgs.length > 0) {
   void dumpTuwel(tuwelDump)
 } else if (isTuwelProbe(process.argv)) {
   void probeTuwel()
+} else if (tryRenewalArg(process.argv)) {
+  void tryRenewal(tryRenewalArg(process.argv)!)
 } else if (!app.requestSingleInstanceLock()) {
   // Already running: the first instance gets our arguments via 'second-instance'.
   app.quit()

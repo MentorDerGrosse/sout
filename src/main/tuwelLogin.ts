@@ -39,16 +39,31 @@ export async function forgetTuwelLogin(): Promise<void> {
 export async function loginToTuwel({ silent = false } = {}): Promise<string> {
   const passport = randomBytes(12).toString('hex')
   const launchUrl = `${TUWEL_URL}/admin/tool/mobile/launch.php?service=moodle_mobile_app&passport=${passport}&urlscheme=${SCHEME}`
-  if (!silent) return attempt(await ssoUrl(launchUrl, false), passport, false)
+  if (!silent) return attempt(await ssoUrl(launchUrl, false), launchUrl, passport, false)
   try {
-    return await attempt(launchUrl, passport, true)
+    return await attempt(launchUrl, launchUrl, passport, true)
   } catch {
-    return attempt(await ssoUrl(launchUrl, true), passport, true)
+    return attempt(await ssoUrl(launchUrl, true), launchUrl, passport, true)
   }
 }
 
+/** Development check (`--try-renewal`): one silent attempt via the TUWEL session or via the TU Wien login. */
+export async function trySilent(via: 'session' | 'sso'): Promise<string> {
+  const passport = randomBytes(12).toString('hex')
+  const launchUrl = `${TUWEL_URL}/admin/tool/mobile/launch.php?service=moodle_mobile_app&passport=${passport}&urlscheme=${SCHEME}`
+  return attempt(via === 'session' ? launchUrl : await ssoUrl(launchUrl, true), launchUrl, passport, true)
+}
+
+let trace: string[] = []
+
+/** Pages the last login window went through (host and path only), for diagnosing failed logins. */
+export const lastLoginTrace = (): string[] => [...trace]
+
+/** TUWEL pages that are still part of logging in; any other TUWEL page means: logged in. */
+const LOGIN_PAGES = /^\/(login|auth|admin\/tool\/(mfa|mobile|policy)|user\/policy)/
+
 /** Loads startUrl in a login window and waits for the moodlemobile:// redirect with the token. */
-function attempt(startUrl: string, passport: string, silent: boolean): Promise<string> {
+function attempt(startUrl: string, launchUrl: string, passport: string, silent: boolean): Promise<string> {
   const win = new BrowserWindow({
     width: 520,
     height: 760,
@@ -57,19 +72,35 @@ function attempt(startUrl: string, passport: string, silent: boolean): Promise<s
     autoHideMenuBar: true,
     webPreferences: { session: loginSession(), sandbox: true, contextIsolation: true, backgroundThrottling: false }
   })
+  const started = Date.now()
+  trace = []
+  const note = (what: string, url: string): void => {
+    try {
+      const { host, pathname } = new URL(url)
+      trace.push(`+${Date.now() - started}ms ${what} ${host}${pathname}`)
+    } catch {
+      trace.push(`+${Date.now() - started}ms ${what} ${url.slice(0, 40)}`)
+    }
+  }
 
   return new Promise((resolve, reject) => {
     let finished = false
+    let relaunches = 0
     const finish = (token: string | null, error?: Error): void => {
       if (finished) return
       finished = true
       clearTimeout(timer)
+      trace.push(`+${Date.now() - started}ms ${token ? 'token' : `abbruch: ${error?.message ?? 'Fenster geschlossen'}`}`)
       // Not while an event of this window is still being handled.
       setTimeout(() => {
         if (!win.isDestroyed()) win.destroy()
       })
-      if (token) resolve(token)
-      else reject(error ?? new Error('Anmeldung abgebrochen.'))
+      if (token) {
+        void keepLoginAcrossRestarts()
+        resolve(token)
+      } else {
+        reject(error ?? new Error('Anmeldung abgebrochen.'))
+      }
     }
     const timer = silent ? setTimeout(() => finish(null, new Error('Stille Anmeldung nicht möglich.')), SILENT_TIMEOUT_MS) : undefined
     const intercept = (url: string, event?: { preventDefault(): void }): void => {
@@ -84,7 +115,10 @@ function attempt(startUrl: string, passport: string, silent: boolean): Promise<s
 
     const contents = win.webContents
     // The token arrives as an HTTP redirect, a script-clicked link or, failing that, a failed load.
-    contents.on('will-redirect', (event) => intercept(event.url, event))
+    contents.on('will-redirect', (event) => {
+      if (!event.url.startsWith(`${SCHEME}://`)) note('weiter', event.url)
+      intercept(event.url, event)
+    })
     contents.on('will-navigate', (event) => intercept(event.url, event))
     contents.on('did-fail-load', (_event, _code, _description, url) => intercept(url))
     contents.setWindowOpenHandler(({ url }) => {
@@ -92,8 +126,17 @@ function attempt(startUrl: string, passport: string, silent: boolean): Promise<s
       return { action: 'deny' }
     })
     contents.on('did-navigate', (_event, url) => {
+      note('seite', url)
+      if (win.isDestroyed()) return
       // There's no address bar, so at least show where the page comes from.
-      if (!win.isDestroyed()) win.setTitle(`TUWEL-Anmeldung · ${new URL(url).host}`)
+      win.setTitle(`TUWEL-Anmeldung · ${new URL(url).host}`)
+      // After the login TUWEL sometimes lands on its start page instead of the app page:
+      // logged in is logged in, so ask for the token ourselves.
+      const { origin, pathname } = new URL(url)
+      if (origin === TUWEL_URL && !LOGIN_PAGES.test(pathname) && relaunches < 2) {
+        relaunches++
+        void win.loadURL(launchUrl)
+      }
     })
     if (silent) {
       // A password field means the stored login has run out: nothing to do without the user.
@@ -109,6 +152,36 @@ function attempt(startUrl: string, passport: string, silent: boolean): Promise<s
     win.on('closed', () => finish(null))
     void win.loadURL(startUrl)
   })
+}
+
+/**
+ * Login cookies of TUWEL and the TU Wien login are session cookies, which Electron forgets when sout
+ * quits. Like a browser that restores its session, keep them (encrypted in the profile) so the
+ * silent renewal still works after a restart. Whether the login is still valid decides the server.
+ */
+async function keepLoginAcrossRestarts(): Promise<void> {
+  const ses = loginSession()
+  const until = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60
+  try {
+    for (const cookie of await ses.cookies.get({})) {
+      const host = (cookie.domain ?? '').replace(/^\./, '')
+      if (!cookie.session || !/(^|\.)tuwien\.ac\.at$/.test(host)) continue
+      await ses.cookies.set({
+        url: `https://${host}${cookie.path ?? '/'}`,
+        name: cookie.name,
+        value: cookie.value,
+        domain: cookie.hostOnly ? undefined : cookie.domain,
+        path: cookie.path,
+        secure: cookie.secure,
+        httpOnly: cookie.httpOnly,
+        sameSite: cookie.sameSite,
+        expirationDate: until
+      })
+    }
+    await ses.cookies.flushStore()
+  } catch {
+    // Not essential: without it, a restart just needs a fresh login.
+  }
 }
 
 /**

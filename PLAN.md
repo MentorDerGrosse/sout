@@ -43,7 +43,9 @@ Dazu:
 - Login wie bei der offiziellen Moodle-App: TU-Login-Fenster → Token. Das Passwort sieht und speichert sout nie.
 - Damit erreichbar: offene Aufgaben (wie die TUWEL-Zeitleiste), Abgabestatus, Fälligkeit und letzte Abgabemöglichkeit, Beschreibung, erlaubte Dateitypen, Test-Zeitfenster, Bewertungen, Kursunterlagen
 - Plan B: TUWEL-Kalenderexport (iCal), aber ohne Abgabestatus
-- **TUWEL-Tokens gelten nur rund 3 Minuten** (gemessen am 7.10.2026; TUWEL läuft auf Moodle 5.1, dort hängt die Dauer an `tokenduration`). Daher: Die Login-Sitzung bleibt gespeichert (`persist:tuwel`), und bei jeder Synchronisierung holt sout bei Bedarf still einen neuen Token – erst über die TUWEL-Sitzung, dann über den TU-Wien-Login im SAML-„passive“-Modus (ohne Formular). Erst wenn auch die TU-Wien-Anmeldung abgelaufen ist, heißt es „Neu anmelden“.
+- **TUWEL-Tokens laufen schnell ab** (TUWEL läuft auf Moodle 5.1, die Dauer hängt an `tokenduration`; beobachtet: von wenigen Minuten bis ~1,5 h, genaue Dauer wird gemessen). Daher holt sout bei **jeder** Synchronisierung still einen Token über die gespeicherte Login-Sitzung (`persist:tuwel`) – erst über die TUWEL-Sitzung, dann über den TU-Wien-Login im SAML-„passive“-Modus (ohne Formular). Das hält nebenbei die TUWEL-Sitzung wach. Erst wenn auch die TU-Wien-Anmeldung abgelaufen ist, kommt eine Benachrichtigung „bitte neu anmelden“.
+- Die Login-Cookies von TUWEL und TU-Wien-Login sind Sitzungs-Cookies, die Electron nicht auf die Platte schreibt – nach einem Neustart wäre die Anmeldung weg. sout macht sie nach jedem erfolgreichen Login dauerhaft (wie ein Browser, der seine Sitzung wiederherstellt); ob die Anmeldung noch gilt, entscheidet weiterhin der Server.
+- Nach dem Login landet TUWEL manchmal auf der Startseite statt bei der App-Freigabe; das Login-Fenster holt sich den Token dann selbst.
 - Sparsam abfragen (z. B. alle 30 Minuten), wegen Akku und TU-Servern
 
 ## Architektur
@@ -99,7 +101,7 @@ Dazu:
 - [x] Deadlines im Kalender (ganztägige Zeile), auf „Heute“ und im Mini-Fenster
 - [x] Erinnerungen als Benachrichtigung, einstellbar: 3 Tage / 1 Tag / 3 Stunden / 1 Stunde vorher; dazu „jetzt offen“, sobald etwas aufmacht (abschaltbar)
 - [x] Mit echtem TUWEL-Login getestet: Login und erste Synchronisierung klappen (31 Aufgaben)
-- [x] Stille Token-Erneuerung (Tokens leben nur ~3 Minuten)
+- [x] Stille Token-Erneuerung bei jeder Synchronisierung, Login übersteht Neustarts, Benachrichtigung wenn neu anmelden nötig
 - [ ] Beobachten, wie lange die stille Erneuerung ohne neuen Login hält (Protokoll: `tokenLog` in `~/.config/sout/tuwel.json`)
 - [ ] Prüfen, ob TUWEL bei Tests den Öffnungszeitpunkt liefert (`--dump-tuwel`)
 - später: Kreuzerlübungen genauer (was ist angekreuzt), Terminbuchungen für Abgabegespräche, Noten und Feedback, Forum-Ankündigungen, Meldung bei neuen Aufgaben, Raum bei Präsenztests aus TISS

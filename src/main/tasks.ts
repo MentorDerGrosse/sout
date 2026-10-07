@@ -1,13 +1,15 @@
-import { app, powerMonitor } from 'electron'
+import { app, Notification, powerMonitor } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Task, TasksData, TodoInput } from '../shared/types'
 import { readJson, writeJson } from './jsonFile'
+import { resourcePath } from './paths'
 import { clearSecret, getSecret, hasSecret, setSecret } from './secrets'
 import { TuwelError, tuwelCall } from './tuwelApi'
 import { forgetTuwelLogin, loginToTuwel } from './tuwelLogin'
 import { fetchSnapshot, toTasks, type MoodleSnapshot } from './tuwelTasks'
+import { showMain } from './windows'
 
 const SYNC_INTERVAL_MS = 30 * 60 * 1000
 
@@ -20,8 +22,10 @@ interface Cache {
   expired: boolean
   /** When the current token was issued – to learn how long TUWEL keeps tokens. */
   tokenIssuedAt?: string | null
-  /** Last token rejections and renewals (newest last), for diagnosis. */
+  /** Every sync's token outcome (newest last), for diagnosis. */
   tokenLog?: string[]
+  /** The "please log in again" notification was shown for the current expiry. */
+  loginNotified?: boolean
 }
 
 interface Todo {
@@ -119,12 +123,22 @@ export function syncTasks(): Promise<void> {
     const token = devFile ? null : getSecret('tuwelToken')
     try {
       if (!devFile && !token) return
-      const snapshot = devFile ? (JSON.parse(readFileSync(devFile, 'utf8')) as MoodleSnapshot) : await fetchWithRenewal(token!)
-      saveCache({ ...loadCache(), tasks: toTasks(snapshot), user: snapshot.site.fullname, syncedAt: new Date().toISOString(), error: null, expired: false })
+      const snapshot = devFile ? (JSON.parse(readFileSync(devFile, 'utf8')) as MoodleSnapshot) : await fetchWithFreshToken(token!)
+      saveCache({
+        ...loadCache(),
+        tasks: toTasks(snapshot),
+        user: snapshot.site.fullname,
+        syncedAt: new Date().toISOString(),
+        error: null,
+        expired: false,
+        loginNotified: false
+      })
       forgetVanishedDone()
     } catch (error) {
       // Keep the old tasks: they are still the best we have when offline.
-      saveCache({ ...loadCache(), error: error instanceof Error ? error.message : String(error), expired: isTokenError(error) })
+      const expired = isTokenError(error)
+      saveCache({ ...loadCache(), error: error instanceof Error ? error.message : String(error), expired })
+      if (expired) notifyLoginNeeded()
     }
   })().finally(() => {
     syncing = null
@@ -141,29 +155,52 @@ function forgetVanishedDone(): void {
   if (doneIds.length !== local.doneIds.length) saveLocal({ ...local, doneIds })
 }
 
-/** TUWEL rejects the token after a while: get a new one silently with the stored login, then retry. */
-async function fetchWithRenewal(token: string): Promise<MoodleSnapshot> {
+/**
+ * TUWEL lets tokens expire quickly. Each sync first asks TUWEL for a token with the stored login –
+ * that also keeps the TUWEL session from timing out. If that isn't possible, the stored token is
+ * tried anyway. Every outcome goes into the log, so we learn how long tokens and sessions last.
+ */
+async function fetchWithFreshToken(stored: string): Promise<MoodleSnapshot> {
+  let token = stored
+  let renewal: string | null = null
   try {
-    return await fetchSnapshot(token)
+    token = await loginToTuwel({ silent: true })
+    keepToken(token)
   } catch (error) {
-    if (!isTokenError(error)) throw error
-    logToken(`abgelehnt (${error.code})`)
-    let fresh: string
-    try {
-      fresh = await loginToTuwel({ silent: true })
-    } catch (renewal) {
-      logToken(`Erneuerung fehlgeschlagen: ${renewal instanceof Error ? renewal.message : String(renewal)}`)
-      throw error
-    }
-    keepToken(fresh)
-    logToken('still erneuert')
-    return fetchSnapshot(fresh)
+    renewal = error instanceof Error ? error.message : String(error)
+  }
+  try {
+    const snapshot = await fetchSnapshot(token)
+    logToken(renewal ? `ok mit gespeichertem Schlüssel (keine Erneuerung: ${renewal})` : token === stored ? 'ok' : 'ok mit neuem Schlüssel')
+    return snapshot
+  } catch (error) {
+    if (isTokenError(error)) logToken(`abgelehnt (${error.code})${renewal ? ` – keine Erneuerung: ${renewal}` : ''}`)
+    throw error
   }
 }
 
+/** Store the token; the issue time only changes when TUWEL handed out a different one. */
 function keepToken(token: string): void {
+  if (token === getSecret('tuwelToken')) return
   setSecret('tuwelToken', token)
   saveCache({ ...loadCache(), tokenIssuedAt: new Date().toISOString() })
+}
+
+/** Once per expiry: a notification that leads straight to the login. */
+function notifyLoginNeeded(): void {
+  const cached = loadCache()
+  if (cached.loginNotified || !Notification.isSupported()) return
+  saveCache({ ...cached, loginNotified: true })
+  const notification = new Notification({
+    title: 'TUWEL: bitte neu anmelden',
+    body: 'Deine TU-Wien-Anmeldung ist abgelaufen. Klick hier, dann siehst du wieder aktuelle Abgaben.',
+    icon: resourcePath('icon.png')
+  })
+  notification.on('click', () => {
+    showMain('deadlines')
+    void loginTuwel().catch(() => {})
+  })
+  notification.show()
 }
 
 function logToken(event: string): void {
@@ -172,7 +209,7 @@ function logToken(event: string): void {
   const age = issued ? ` – Schlüssel ${Math.round((Date.now() - issued) / 60_000)} min alt` : ''
   const line = `${new Date().toISOString()} ${event}${age}`
   console.log(`[tuwel] ${line}`)
-  saveCache({ ...cached, tokenLog: [...(cached.tokenLog ?? []), line].slice(-20) })
+  saveCache({ ...cached, tokenLog: [...(cached.tokenLog ?? []), line].slice(-50) })
 }
 
 export async function loginTuwel(): Promise<void> {
@@ -182,7 +219,7 @@ export async function loginTuwel(): Promise<void> {
   const site = await tuwelCall<{ fullname: string }>(token, 'core_webservice_get_site_info')
   keepToken(token)
   logToken('angemeldet')
-  saveCache({ ...loadCache(), user: site.fullname, error: null, expired: false })
+  saveCache({ ...loadCache(), user: site.fullname, error: null, expired: false, loginNotified: false })
   await syncTasks()
 }
 
