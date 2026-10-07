@@ -1,6 +1,6 @@
 # sout – Plan
 
-Lebendes Dokument, Stand 6. Oktober 2026. Fasst das Brainstorming und alle bisherigen Entscheidungen zusammen.
+Lebendes Dokument, Stand 8. Oktober 2026. Fasst das Brainstorming und alle bisherigen Entscheidungen zusammen.
 
 ## Ziel
 
@@ -25,7 +25,7 @@ Dazu:
 | Wayland | App läuft über XWayland, damit das Mini-Fenster oben rechts platziert werden kann. Der Schalter `--ozone-platform=x11` muss beim Start übergeben werden (npm-Skripte, `sout`-Befehl und Autostart tun das; sonst startet sout sich einmal selbst damit neu). Zur Laufzeit gesetzt erreicht er nur die Kindprozesse – dann bleiben die Fenster leer. |
 | Sprache | Electron startet mit `--lang=de-AT` – Datumsfelder und Menüs sind deutsch, auch wenn das System auf Englisch steht |
 | Notizen | Markdown-Dateien; LaTeX-Formeln wichtig; PDFs (Folien) wichtig; Screenshots niedrige Priorität; keine Handschrift |
-| Reihenfolge | egal, daher Phase 0 bis 4 wie unten |
+| Reihenfolge | egal, daher Phase 0 bis 4 wie unten; Windows & Mac (Phase 5) ganz zum Schluss |
 
 ## Datenquellen
 
@@ -104,6 +104,7 @@ Dazu:
 - [x] Stille Token-Erneuerung bei jeder Synchronisierung, Login übersteht Neustarts, Benachrichtigung wenn neu anmelden nötig
 - [ ] Beobachten, wie lange die stille Erneuerung ohne neuen Login hält (Protokoll: `tokenLog` in `~/.config/sout/tuwel.json`)
 - [ ] Prüfen, ob TUWEL bei Tests den Öffnungszeitpunkt liefert (`--dump-tuwel`)
+- [ ] Klären, warum nach dem manuellen Login erst die Erneuerung im Hintergrund den Token bekommt (Protokoll: `loginTrace` in `tuwel.json`)
 - später: Kreuzerlübungen genauer (was ist angekreuzt), Terminbuchungen für Abgabegespräche, Noten und Feedback, Forum-Ankündigungen, Meldung bei neuen Aufgaben, Raum bei Präsenztests aus TISS
 
 ### Phase 3 – Notizen
@@ -128,10 +129,23 @@ Dazu:
 
 ### Phase 4 – Feinschliff
 
-- [ ] Mini-Fenster als echte Tagesübersicht: nächster Termin mit Raum und Countdown, Tagesplan, nächste Abgaben, Schnellnotiz
+- [ ] Mini-Fenster als echte Tagesübersicht – nächste Termine mit Countdown und nächste Abgaben sind schon drin; fehlt: Schnellnotiz (mit Phase 3), kompakter Tagesplan
 - [ ] Symbol zeigt Dringendes an (z. B. Punkt, wenn in weniger als 24 Stunden etwas fällig ist)
 - [ ] Meldungen bei Änderungen (Raum, Absage, neue Aufgabe, neue Note)
 - [ ] Installation als RPM oder AppImage
+
+### Phase 5 – Windows & Mac (zum Schluss)
+
+Gestartet würde sout dort schon, und Kalender, Abgaben und Einstellungen funktionieren; die Desktop-Einbindung ist aber auf Linux/GNOME gebaut:
+
+- [ ] Autostart über die Systemfunktion (`app.setLoginItemSettings`) statt der Linux-`.desktop`-Datei
+- [ ] macOS: App-Menü mit „Bearbeiten“, damit Cmd+C/V/X/A in Eingabefeldern und Cmd+Q funktionieren (bisher nur Strg-Kürzel)
+- [ ] Tray-Symbol je System: macOS als „Template“-Bild in Menüleistengröße, Windows gut sichtbar auch auf heller Taskleiste
+- [ ] Mini-Fenster dort öffnen, wo das Symbol sitzt (Windows: unten rechts über der Taskleiste; `tray.getBounds()`)
+- [ ] Windows: App-Kennung (`app.setAppUserModelId`), damit Benachrichtigungen erscheinen
+- [ ] Texte je System („GNOME“, „oben in der Leiste“, Schlüsselbund); `install-desktop` nur unter Linux anbieten
+- [ ] Auf echten Windows- und Mac-Rechnern testen
+- [ ] Bei Bedarf Installer für Windows bzw. `.dmg` für macOS
 
 ## Ideen für später
 
