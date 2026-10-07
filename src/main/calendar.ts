@@ -104,7 +104,7 @@ export function startCalendarSync(listener: () => void): void {
 // ---------- TISS events → our model ----------
 
 const KINDS: Record<string, EventKind> = { COURSE: 'course', GROUP: 'group', EXAM_SLOT: 'exam', HOLIDAY: 'holiday' }
-/** "104.633 VU Algebra …" → LVA number, optional type, rest. */
+/** "123.456 VU Titel …" → LVA number, optional type, rest. */
 const SUMMARY = /^(\d{3}\.[0-9A-Z]{3})\s+(?:([A-Z]{2})\s+)?(.*)$/
 
 function toEvents(raw: IcalEvent[]): CalendarEvent[] {
@@ -216,7 +216,7 @@ const SMALL_WORDS = new Set(['und', 'in', 'die', 'der', 'das', 'des', 'den', 'de
 
 /**
  * Short names as students use them: "Analysis" stays, long titles become initials –
- * "Algebra und Diskrete Mathematik für …" → "ADM", "Einführung in die Programmierung 1" → "EP1".
+ * "Grundlagen der Beispielkunde für …" → "GB", "Einführung in die Beispielkunde 1" → "EB1".
  */
 function defaultShortName(title: string): string {
   const name = title.split(' für ')[0]!.trim()

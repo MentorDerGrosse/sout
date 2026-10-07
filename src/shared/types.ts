@@ -63,7 +63,7 @@ export interface CalendarEvent {
   start: string
   end: string
   allDay: boolean
-  /** LVA number, e.g. "104.633"; null for holidays. */
+  /** LVA number, e.g. "123.456"; null for holidays. */
   courseKey: string | null
   /** The raw title from TISS. */
   title: string
@@ -116,7 +116,7 @@ export interface Task {
   module: string | null
   /** What happens at `due`: "fällig", "schließt", … */
   dueLabel: string
-  /** LVA number, e.g. "185.A91" – links the task to the course from the TISS calendar. */
+  /** LVA number, e.g. "123.456" – links the task to the course from the TISS calendar. */
   courseKey: string | null
   /** Course name from TUWEL, for courses that aren't in the TISS calendar. */
   courseName: string | null

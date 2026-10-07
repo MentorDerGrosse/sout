@@ -85,7 +85,7 @@ export default function CalendarView({ onNavigate }: { onNavigate: (view: View) 
       }
     })
 
-  // Deadlines go into the all-day row of their day: "23:59 EP1 · Übungsblatt 2".
+  // Deadlines go into the all-day row of their day: "23:59 Mathe · Übungsblatt 2".
   if (tasks && !hiddenKinds.has('deadline')) {
     for (const task of openTasks(tasks)) {
       if (!task.due || (task.courseKey && courses.get(task.courseKey)?.hidden)) continue

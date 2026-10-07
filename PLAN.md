@@ -84,7 +84,7 @@ Dazu:
 - [x] TISS führt Vorlesungen mit Ausweich-/Übertragungsraum doppelt – sie werden zu einem Termin zusammengefasst
 - [x] Ansichten Tag, Woche, Monat, Liste (FullCalendar 6)
 - [x] Eine Farbe pro Fach, Filter nach Fach (dauerhaft) und Typ
-- [x] Kurznamen: standardmäßig Abkürzungen (ADM, EP1, GDS), in den Einstellungen änderbar, ebenso Farbe und Ausblenden
+- [x] Kurznamen: lange Titel werden standardmäßig zu Initialen („Einführung in die Beispielkunde 1“ → „EB1“), kurze bleiben; in den Einstellungen änderbar, ebenso Farbe und Ausblenden
 - [x] Termin-Details: Raum mit TUW-Maps-Link und Adresse (Raumliste aus better-tiss-calendar), Link zur LVA in TISS
 - [x] „Heute“ und Mini-Fenster zeigen die nächsten Termine, mit „in 25 min“ / „läuft“
 - [ ] Eigene Termine (Lerngruppe, Lernblöcke)
@@ -100,7 +100,7 @@ Dazu:
 - [x] Abgegebenes verschwindet automatisch (TUWEL-Zeitleiste); in sout abhaken; eigene To-dos mit Datum und Fach
 - [x] Deadlines im Kalender (ganztägige Zeile), auf „Heute“ und im Mini-Fenster
 - [x] Erinnerungen als Benachrichtigung, einstellbar: 3 Tage / 1 Tag / 3 Stunden / 1 Stunde vorher; dazu „jetzt offen“, sobald etwas aufmacht (abschaltbar)
-- [x] Mit echtem TUWEL-Login getestet: Login und erste Synchronisierung klappen (31 Aufgaben)
+- [x] Mit echtem TUWEL-Login getestet: Login und erste Synchronisierung klappen
 - [x] Stille Token-Erneuerung bei jeder Synchronisierung, Login übersteht Neustarts, Benachrichtigung wenn neu anmelden nötig
 - [ ] Beobachten, wie lange die stille Erneuerung ohne neuen Login hält (Protokoll: `tokenLog` in `~/.config/sout/tuwel.json`)
 - [ ] Prüfen, ob TUWEL bei Tests den Öffnungszeitpunkt liefert (`--dump-tuwel`)

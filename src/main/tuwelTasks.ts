@@ -188,7 +188,7 @@ export function toTasks(snapshot: MoodleSnapshot): Task[] {
 
 const isoTime = (seconds: number): string => new Date(seconds * 1000).toISOString()
 
-/** TUWEL course names usually contain the LVA number ("185.A91-2026W", "185.A91 Einführung …"). */
+/** TUWEL course names usually contain the LVA number ("123.456-2026W", "123.456 Titel …"). */
 function lvaNumber(course: MoodleCourse): string | null {
   for (const text of [course.shortname, course.idnumber, course.fullname]) {
     const match = text ? LVA.exec(text) : null
