@@ -46,6 +46,7 @@ npm run install-desktop    # Eintrag in der App-Übersicht + Befehl ~/.local/bin
 | `~/.config/sout/tuwel.json` | zwischengespeicherte TUWEL-Abgaben und -Tests |
 | `~/.config/sout/todos.json` | eigene To-dos und in sout abgehakte TUWEL-Aufgaben |
 | `~/.config/sout/reminders.json` | welche Erinnerungen schon gezeigt wurden |
+| `~/.config/sout/Partitions/tuwel/` | die TU-Wien-/TUWEL-Anmeldung (Cookies) für die stille Erneuerung; „Abmelden“ löscht sie |
 | `~/.config/autostart/sout.desktop` | nur wenn Autostart an ist |
 
 ## Startschalter: XWayland und Deutsch
@@ -78,6 +79,7 @@ Hilfen für die Entwicklung (nur ungepackt):
 | `SOUT_TISS_FILE=<datei>` | liest den Kalender aus dieser Datei statt von TISS – z. B. für den Testlauf mit echten Daten |
 | `--dump-tuwel=<datei>` | speichert, was TUWEL liefert (Zeitleiste, Abgaben, Tests), als JSON |
 | `SOUT_TUWEL_FILE=<datei>` | nimmt diese JSON-Datei statt TUWEL |
+| `--probe-tuwel` | prüft, ob TUWEL den gespeicherten Schlüssel noch annimmt (gibt nur „gültig“/„abgelehnt“ aus) |
 | `SOUT_SMOKE_THEME=light` | Testlauf im hellen statt dunklen Modus |
 
 ## Danke

@@ -5,7 +5,8 @@ import { IPC, type View } from '../shared/types'
 import { autostartEntry } from './autostart'
 import { startCalendarSync, syncCalendar } from './calendar'
 import { startTasksSync, syncTasks } from './tasks'
-import { TuwelError } from './tuwelApi'
+import { readJson } from './jsonFile'
+import { TuwelError, tuwelCall } from './tuwelApi'
 import { fetchSnapshot } from './tuwelTasks'
 import { registerIpc } from './ipc'
 import { getSecret, secretsStatus } from './secrets'
@@ -205,4 +206,28 @@ export async function dumpTuwel(file: string): Promise<void> {
     profile.done()
     app.exit(code)
   }
+}
+
+/** `--probe-tuwel` (development only): is the stored TUWEL token still accepted? Prints one line, no secrets. */
+export function isTuwelProbe(argv: string[]): boolean {
+  return argv.includes('--probe-tuwel') && !app.isPackaged
+}
+
+export async function probeTuwel(): Promise<void> {
+  const profile = useOwnProfile()
+  await app.whenReady()
+  const token = getSecret('tuwelToken', profile.realUserData)
+  const cache = readJson(join(profile.realUserData, 'tuwel.json')) as { tokenIssuedAt?: string } | undefined
+  const age = cache?.tokenIssuedAt ? Math.round((Date.now() - Date.parse(cache.tokenIssuedAt)) / 60_000) : null
+  let result: string
+  try {
+    if (!token) throw new Error('kein Token')
+    await tuwelCall(token, 'core_webservice_get_site_info')
+    result = 'gültig'
+  } catch (error) {
+    result = error instanceof TuwelError ? `abgelehnt (${error.code}): ${error.message}` : String(error)
+  }
+  console.log(`[probe] ${new Date().toISOString()} ${result} – Schlüssel-Alter: ${age ?? '?'} min`)
+  profile.done()
+  app.exit(0)
 }

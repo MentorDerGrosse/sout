@@ -6,7 +6,7 @@ import type { Task, TasksData, TodoInput } from '../shared/types'
 import { readJson, writeJson } from './jsonFile'
 import { clearSecret, getSecret, hasSecret, setSecret } from './secrets'
 import { TuwelError, tuwelCall } from './tuwelApi'
-import { loginToTuwel } from './tuwelLogin'
+import { forgetTuwelLogin, loginToTuwel } from './tuwelLogin'
 import { fetchSnapshot, toTasks, type MoodleSnapshot } from './tuwelTasks'
 
 const SYNC_INTERVAL_MS = 30 * 60 * 1000
@@ -18,6 +18,10 @@ interface Cache {
   syncedAt: string | null
   error: string | null
   expired: boolean
+  /** When the current token was issued – to learn how long TUWEL keeps tokens. */
+  tokenIssuedAt?: string | null
+  /** Last token rejections and renewals (newest last), for diagnosis. */
+  tokenLog?: string[]
 }
 
 interface Todo {
@@ -102,6 +106,11 @@ function todoTask(todo: Todo): Task {
   }
 }
 
+/** Moodle's answers when a token is gone or expired. */
+const TOKEN_ERRORS = new Set(['invalidtoken', 'accessexception'])
+
+const isTokenError = (error: unknown): error is TuwelError => error instanceof TuwelError && TOKEN_ERRORS.has(error.code)
+
 /** Reads TUWEL (or, in development, the snapshot in SOUT_TUWEL_FILE) and replaces the cached tasks. */
 export function syncTasks(): Promise<void> {
   syncing ??= (async () => {
@@ -110,13 +119,12 @@ export function syncTasks(): Promise<void> {
     const token = devFile ? null : getSecret('tuwelToken')
     try {
       if (!devFile && !token) return
-      const snapshot = devFile ? (JSON.parse(readFileSync(devFile, 'utf8')) as MoodleSnapshot) : await fetchSnapshot(token!)
-      saveCache({ tasks: toTasks(snapshot), user: snapshot.site.fullname, syncedAt: new Date().toISOString(), error: null, expired: false })
+      const snapshot = devFile ? (JSON.parse(readFileSync(devFile, 'utf8')) as MoodleSnapshot) : await fetchWithRenewal(token!)
+      saveCache({ ...loadCache(), tasks: toTasks(snapshot), user: snapshot.site.fullname, syncedAt: new Date().toISOString(), error: null, expired: false })
       forgetVanishedDone()
     } catch (error) {
       // Keep the old tasks: they are still the best we have when offline.
-      const expired = error instanceof TuwelError && error.code === 'invalidtoken'
-      saveCache({ ...loadCache(), error: error instanceof Error ? error.message : String(error), expired })
+      saveCache({ ...loadCache(), error: error instanceof Error ? error.message : String(error), expired: isTokenError(error) })
     }
   })().finally(() => {
     syncing = null
@@ -133,11 +141,47 @@ function forgetVanishedDone(): void {
   if (doneIds.length !== local.doneIds.length) saveLocal({ ...local, doneIds })
 }
 
+/** TUWEL rejects the token after a while: get a new one silently with the stored login, then retry. */
+async function fetchWithRenewal(token: string): Promise<MoodleSnapshot> {
+  try {
+    return await fetchSnapshot(token)
+  } catch (error) {
+    if (!isTokenError(error)) throw error
+    logToken(`abgelehnt (${error.code})`)
+    let fresh: string
+    try {
+      fresh = await loginToTuwel({ silent: true })
+    } catch (renewal) {
+      logToken(`Erneuerung fehlgeschlagen: ${renewal instanceof Error ? renewal.message : String(renewal)}`)
+      throw error
+    }
+    keepToken(fresh)
+    logToken('still erneuert')
+    return fetchSnapshot(fresh)
+  }
+}
+
+function keepToken(token: string): void {
+  setSecret('tuwelToken', token)
+  saveCache({ ...loadCache(), tokenIssuedAt: new Date().toISOString() })
+}
+
+function logToken(event: string): void {
+  const cached = loadCache()
+  const issued = cached.tokenIssuedAt ? Date.parse(cached.tokenIssuedAt) : null
+  const age = issued ? ` – Schlüssel ${Math.round((Date.now() - issued) / 60_000)} min alt` : ''
+  const line = `${new Date().toISOString()} ${event}${age}`
+  console.log(`[tuwel] ${line}`)
+  saveCache({ ...cached, tokenLog: [...(cached.tokenLog ?? []), line].slice(-20) })
+}
+
 export async function loginTuwel(): Promise<void> {
-  const token = await loginToTuwel()
+  // With a still valid TU Wien login this needs no window at all.
+  const token = await loginToTuwel({ silent: true }).catch(() => loginToTuwel())
   // Make sure the token works before keeping it.
   const site = await tuwelCall<{ fullname: string }>(token, 'core_webservice_get_site_info')
-  setSecret('tuwelToken', token)
+  keepToken(token)
+  logToken('angemeldet')
   saveCache({ ...loadCache(), user: site.fullname, error: null, expired: false })
   await syncTasks()
 }
@@ -145,6 +189,7 @@ export async function loginTuwel(): Promise<void> {
 export function logoutTuwel(): void {
   clearSecret('tuwelToken')
   saveCache(EMPTY)
+  void forgetTuwelLogin()
 }
 
 export function addTodo(input: TodoInput): void {
