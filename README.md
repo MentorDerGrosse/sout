@@ -114,6 +114,10 @@ Hilfen für die Entwicklung (nur ungepackt):
 | `--probe-tuwel` | prüft, ob TUWEL den gespeicherten Schlüssel noch annimmt (gibt nur „gültig“/„abgelehnt“ aus) |
 | `SOUT_SMOKE_THEME=light` | Testlauf im hellen statt dunklen Modus |
 
+## Lizenz
+
+MIT – siehe [LICENSE](LICENSE). Du darfst sout benutzen, verändern und weitergeben, solange der Lizenzhinweis dabei bleibt.
+
 ## Danke
 
 Die Raumliste `resources/rooms.csv` (Adressen, TUW-Maps-Codes) stammt aus

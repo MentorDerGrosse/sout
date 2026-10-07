@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Studium an der TU Wien organisieren: TISS-Kalender, TUWEL-Abgaben, Notizen pro Fach",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
   "main": "./out/main/index.js",
   "desktopName": "sout.desktop",
   "scripts": {
