@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { CalendarData, CalendarEvent, Course, CoursePatch, EventKind } from '../shared/types'
 import { parseIcal, type IcalEvent } from './ical'
+import { courseInfo } from './courseInfo'
 import { readJson, writeJson } from './jsonFile'
 import { reportChanges } from './changes'
 import { ownEvents, ownOccurrences } from './ownEvents'
@@ -222,13 +223,17 @@ function courses(events: CalendarEvent[]): Course[] {
   return keys.map((key) => {
     const { type, title } = found.get(key)!
     const override = overrides[key]!
+    const info = courseInfo(key)
     return {
       key,
       type,
       title,
       shortName: override.shortName ?? defaultShortName(title),
       color: override.color,
-      hidden: override.hidden ?? false
+      hidden: override.hidden ?? false,
+      ects: info?.ects ?? null,
+      tuwelUrl: info?.tuwelUrl ?? null,
+      lectureTube: info?.lectureTube ?? false
     }
   })
 }

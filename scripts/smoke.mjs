@@ -26,10 +26,11 @@ const day = (offset, hours = 0, minutes = 0) => {
   return date
 }
 const monday = day(-((now.getDay() + 6) % 7))
+// LVA number, type, title, room, ECTS, TUWEL course id (all made up).
 const courses = [
-  ['123.456', 'VO', 'Beispielkunde', 'HS 1 Beispielhörsaal - BSP'],
-  ['234.567', 'VU', 'Einführung in die Beispielmathematik', 'Seminarraum 2 - BSP'],
-  ['345.678', 'UE', 'Grundlagen der Musterrechnung', 'HS 3 - BSP']
+  ['123.456', 'VO', 'Beispielkunde', 'HS 1 Beispielhörsaal - BSP', '3.0', 9001],
+  ['234.567', 'VU', 'Einführung in die Beispielmathematik', 'Seminarraum 2 - BSP', '5.5', 9002],
+  ['345.678', 'UE', 'Grundlagen der Musterrechnung', 'HS 3 - BSP', '4.0', 9003]
 ]
 
 function tissEvents() {
@@ -156,8 +157,8 @@ const tissDay = (date) => `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${
 const tissTime = (date) => `${pad(date.getHours())}:${pad(date.getMinutes())}`
 const WEEKDAYS = ['So.', 'Mo.', 'Di.', 'Mi.', 'Do.', 'Fr.', 'Sa.']
 
-/** Like TISS's course page: exams (one table row per room), groups and their dates, LVA and group registration. */
-function coursePage([key, type, title], list, registration) {
+/** Like TISS's course page: facts, exams (one table row per room), groups and their dates, LVA and group registration. */
+function coursePage([key, type, title, , ects, tuwelId], list, registration) {
   const heads = ['Tag', 'Zeit', 'Datum', 'Ort', 'Prüfungsmodus', 'Anmeldefrist', 'Anmeldung', 'Prüfung']
   let index = 0
   const rows = list.flatMap((exam) =>
@@ -181,6 +182,8 @@ function coursePage([key, type, title], list, registration) {
   return `<!DOCTYPE html>
 <html><head><title>${key} ${title} | TU Wien</title></head><body>
 <h1>${key} ${type} ${title}</h1>
+<h2>Merkmale</h2><div><span>Semesterwochenstunden: 2.0</span> <span>ECTS: ${ects}</span> <span>Typ: ${type}</span> <span>LectureTube Lehrveranstaltung</span></div>
+<p><a href="https://tuwel.tuwien.ac.at/course/view.php?id=${tuwelId}">TUWEL</a></p>
 <h2>Prüfungen</h2><div class="ui-datatable"><table role="grid"><thead><tr>${heads.map(th).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>
 <h2>Gruppen &amp; Termine</h2><div class="ui-datatable"><table role="grid"><thead><tr>${th('Gruppe')}${th('Datum')}</tr></thead>
 <tbody><tr data-ri="0" class="ui-widget-content"><td role="gridcell">Gruppe 1</td><td role="gridcell">${tissDay(day(5))}</td></tr></tbody></table></div>
@@ -288,6 +291,9 @@ for (const [sync, expected] of Object.entries(expectedExams)) {
     if (found !== status) problems.push(`Prüfung ${exam} (${sync === 'first' ? 'erste' : 'zweite'} Abfrage): ${found ?? 'fehlt'} statt ${status}`)
   }
 }
+// ECTS and TUWEL link from the course pages, in the course list.
+const expectedInfo = courses.map(([key, , , , ects, tuwelId]) => `${key} ${Number(ects)} ECTS https://tuwel.tuwien.ac.at/course/view.php?id=${tuwelId}`)
+if (JSON.stringify(report.courseInfo) !== JSON.stringify(expectedInfo)) problems.push(`LVA-Angaben: ${JSON.stringify(report.courseInfo)}`)
 if (!(report.overlaps >= 2)) problems.push(`Überschneidungen: ${report.overlaps} statt mindestens 2 markierte Termine`)
 const examCount = Object.keys(report.exams?.first ?? {}).length
 if (examCount !== Object.keys(expectedExams.first).length) problems.push(`${examCount} statt ${Object.keys(expectedExams.first).length} Prüfungstermine gelesen`)

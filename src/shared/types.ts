@@ -128,6 +128,12 @@ export interface Course {
   shortName: string
   color: string
   hidden: boolean
+  /** From the course's TISS page (null until it has been read). */
+  ects: number | null
+  /** The course in TUWEL, as TISS links it. */
+  tuwelUrl: string | null
+  /** "LectureTube Lehrveranstaltung": lectures are streamed and recorded. */
+  lectureTube: boolean
 }
 
 export type CoursePatch = Partial<Pick<Course, 'shortName' | 'color' | 'hidden'>>

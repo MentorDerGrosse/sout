@@ -386,6 +386,8 @@ function CoursesSection() {
   )
 }
 
+const ectsFormat = new Intl.NumberFormat('de-AT', { maximumFractionDigits: 1 })
+
 function CourseRow({ course }: { course: Course }) {
   const update = (patch: Parameters<typeof window.sout.updateCourse>[1]): void => void window.sout.updateCourse(course.key, patch)
   return (
@@ -412,6 +414,15 @@ function CourseRow({ course }: { course: Course }) {
         />
         <div className="row-desc">
           {course.key} {course.type} {course.title}
+          {course.ects !== null && ` · ${ectsFormat.format(course.ects)} ECTS`}
+          {course.tuwelUrl && (
+            <>
+              {' · '}
+              <a href={course.tuwelUrl} target="_blank" rel="noreferrer">
+                TUWEL
+              </a>
+            </>
+          )}
         </div>
       </div>
       <Toggle label={`${course.shortName} anzeigen`} checked={!course.hidden} onChange={(shown) => update({ hidden: !shown })} />

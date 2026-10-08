@@ -500,6 +500,11 @@ function EventDetails(props: {
           <a className="button secondary small" href={tissCourseUrl(course.key, start)} target="_blank" rel="noreferrer">
             <ExternalLink size={13} /> LVA in TISS
           </a>
+          {course.tuwelUrl && (
+            <a className="button secondary small" href={course.tuwelUrl} target="_blank" rel="noreferrer">
+              <ExternalLink size={13} /> Kurs in TUWEL
+            </a>
+          )}
         </div>
       )}
       {!course && event.kind !== 'holiday' && <Callout kind="info" title={event.title} />}

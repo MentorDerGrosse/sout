@@ -88,6 +88,7 @@ export async function runSmokeTest(dir: string): Promise<void> {
     // The course pages after the calendar: it says which courses are yours.
     await syncExams(true)
     report['exams'] = { first: examReport() }
+    report['courseInfo'] = calendarData().courses.map((course) => `${course.key} ${course.ects} ECTS ${course.tuwelUrl}`)
     report['deadlines'] = examsData().deadlines.map((deadline) =>
       [deadline.courseKey, deadline.kind, deadline.groups.join('+'), deadline.kind === 'group' ? deadlineStatus(deadline, Date.now()) : ''].filter(Boolean).join(' ')
     )
@@ -618,6 +619,8 @@ export async function dumpExams(file: string): Promise<void> {
     const counts: Record<string, number> = {}
     for (const exam of data.exams) counts[examStatus(exam, Date.now())] = (counts[examStatus(exam, Date.now())] ?? 0) + 1
     console.log(`[exams] ${data.courses} LVAs, ${data.exams.length} Prüfungstermine ${JSON.stringify(counts)}, nicht lesbar: ${data.failed.length}`)
+    console.log(`[exams] ECTS/TUWEL-Link je LVA: ${calendarData().courses.map((course) => `${course.ects ?? '?'}/${course.tuwelUrl ? 'ja' : 'nein'}`).join(', ')}`)
+    console.log(`[exams] Fristen: ${data.deadlines.map((deadline) => `${deadline.kind}${deadline.groups.length ? ` (${deadline.groups.length} Gruppen)` : ''}`).join(', ') || 'keine'}`)
     for (const failed of data.failed) console.log(`[exams]   ${failed.courseKey}: ${failed.error}`)
   } catch (error) {
     console.log(`[exams] failed: ${error instanceof Error ? error.message : String(error)}`)

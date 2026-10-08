@@ -30,6 +30,17 @@ export interface ParsedRegistrations {
   groups: { name: string; opens: string | null; closes: string | null }[]
 }
 
+/** From "Merkmale" and the links of the page. */
+export interface ParsedCourseInfo {
+  ects: number | null
+  /** Semesterwochenstunden */
+  hours: number | null
+  /** The course's TUWEL page, if TISS links it. */
+  tuwelUrl: string | null
+  /** "LectureTube Lehrveranstaltung": the lectures are streamed and recorded. */
+  lectureTube: boolean
+}
+
 /** Is this a course page (and not TISS's "Loading..." page or an error)? */
 export function isCoursePage(html: string, courseKey: string): boolean {
   const title = /<title>([^<]*)<\/title>/i.exec(html)?.[1] ?? ''
@@ -77,6 +88,23 @@ export function parseExamTable(html: string, courseKey: string): ParsedExam[] {
     })
   }
   return [...exams.values()].sort((a, b) => a.start.localeCompare(b.start))
+}
+
+export function parseCourseInfo(html: string): ParsedCourseInfo {
+  const start = html.search(/>\s*Merkmale\s*<\/h2>/i)
+  const end = start >= 0 ? html.indexOf('<h2', start + 1) : -1
+  const facts = start < 0 ? '' : text(html.slice(start, end < 0 ? undefined : end))
+  const number = (label: string): number | null => {
+    const match = new RegExp(`${label}:\\s*([\\d.,]+)`).exec(facts)
+    return match ? Number(match[1]!.replace(',', '.')) : null
+  }
+  const tuwel = /https:\/\/tuwel\.tuwien\.ac\.at\/course\/view\.php\?id=(\d+)/.exec(html)
+  return {
+    ects: number('ECTS'),
+    hours: number('Semesterwochenstunden'),
+    tuwelUrl: tuwel ? `https://tuwel.tuwien.ac.at/course/view.php?id=${tuwel[1]}` : null,
+    lectureTube: /LectureTube Lehrveranstaltung/i.test(facts)
+  }
 }
 
 /**

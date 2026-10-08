@@ -1,11 +1,12 @@
-import { app, powerMonitor, session } from 'electron'
+import { app, net, powerMonitor, session } from 'electron'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { currentSemester, tissCourseUrl } from '../shared/tu'
 import type { CalendarEvent, Course, CourseDeadline, ExamDate, ExamsData } from '../shared/types'
-import { calendarData } from './calendar'
+import { calendarChanged, calendarData } from './calendar'
+import { saveCourseInfo, type CourseInfo } from './courseInfo'
 import { reportChanges, type NewChange } from './changes'
-import { isCoursePage, parseExamTable, parseRegistrations, type ParsedExam, type ParsedRegistrations } from './examParser'
+import { isCoursePage, parseCourseInfo, parseExamTable, parseRegistrations, type ParsedExam, type ParsedRegistrations } from './examParser'
 import { readJson, writeJson } from './jsonFile'
 import { roomInfo } from './rooms'
 import { getSettings } from './settings'
@@ -229,6 +230,7 @@ export function syncExams(force = false): Promise<void> {
     // By id: a course read in two semesters may list the same exam twice.
     const exams = new Map<string, StoredExam>()
     const registrations: StoredRegistrations[] = []
+    const infos: Record<string, CourseInfo> = {}
     const states: Record<string, PageState> = {}
     const added: StoredExam[] = []
     for (const [index, page] of pages.entries()) {
@@ -238,6 +240,11 @@ export function syncExams(force = false): Promise<void> {
         const html = await readCoursePage(page.key, page.semester)
         const found = parseExamTable(html, page.key)
         registrations.push({ ...parseRegistrations(html), courseKey: page.key, semester: page.semester })
+        // The first page of a course is its current semester.
+        if (!infos[page.key]) {
+          const info = parseCourseInfo(html)
+          infos[page.key] = { ...info, semester: page.semester, tuwelUrl: info.tuwelUrl ?? (devDir ? null : await tuwelLinkFromApi(page)) }
+        }
         for (const exam of found) {
           if (exams.has(exam.id)) continue
           exams.set(exam.id, { ...exam, courseKey: page.key, semester: page.semester })
@@ -256,6 +263,9 @@ export function syncExams(force = false): Promise<void> {
     }
     const upcoming = (exam: StoredExam): boolean => Date.parse(exam.end) > Date.now()
     // Read again: "Brauche ich nicht" may have been clicked in the meantime.
+    saveCourseInfo(infos)
+    // ECTS and TUWEL links are part of the course list.
+    calendarChanged()
     saveCache({ ...loadCache(), exams: [...exams.values()].filter(upcoming), registrations, pages: states, syncedAt: now })
     reportChanges(added.filter(upcoming).map(examChange), getSettings().notifyExamRegistration)
   })().finally(() => {
@@ -307,6 +317,18 @@ async function fetchCoursePage(courseKey: string, semester: string): Promise<str
     return await response.text()
   } finally {
     await pages.cookies.remove('https://tiss.tuwien.ac.at', cookie).catch(() => {})
+  }
+}
+
+/** Some course pages don't link the TUWEL course; TISS's public course API has it ("eLearning"). */
+async function tuwelLinkFromApi(page: CoursePage): Promise<string | null> {
+  try {
+    const response = await net.fetch(`https://tiss.tuwien.ac.at/api/course/${page.key.replace('.', '')}-${page.semester}`, { signal: AbortSignal.timeout(15_000) })
+    if (!response.ok) return null
+    const link = /<(?:\w+:)?eLearning>\s*(https:\/\/tuwel\.tuwien\.ac\.at\/course\/view\.php\?id=\d+)\s*</.exec(await response.text())
+    return link?.[1] ?? null
+  } catch {
+    return null
   }
 }
 
