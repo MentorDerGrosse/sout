@@ -12,7 +12,8 @@ const DEFAULTS: Settings = {
   notesDir: '',
   notifyChanges: true,
   notifyNewTasks: true,
-  notifyGrades: true
+  notifyGrades: true,
+  notifyExamRegistration: true
 }
 
 let current: Settings | null = null

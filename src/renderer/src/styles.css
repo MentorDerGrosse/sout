@@ -1463,6 +1463,7 @@ body.resizing iframe {
 
 .task-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -1574,11 +1575,94 @@ select.input {
 
 .task-due.opens {
   display: flex;
+  align-items: flex-end;
 }
 
 .task-card.not-yet .task-title,
 .task-row.not-yet .task-title {
   color: var(--text-muted);
+}
+
+/* ---------- Exams (Prüfungen) ---------- */
+
+.exam-status {
+  display: flex;
+  padding-top: 1px;
+  color: var(--text-muted);
+}
+
+.exam-status.open {
+  color: var(--accent);
+}
+
+.exam-status.registered,
+.exam-status.covered,
+.exam-when.registered,
+.exam-when.covered,
+.exam-signed-up {
+  color: var(--ok);
+}
+
+.exam-status.urgent {
+  color: var(--warn);
+}
+
+.exam-when.soon {
+  color: var(--accent);
+}
+
+.exam-when.closed,
+.exam-when.dismissed,
+.exam-when.none {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.task-card.faded {
+  opacity: 0.65;
+}
+
+.exam-room + .exam-room {
+  margin-top: 3px;
+}
+
+/* The details panel's links are inline-flex; in a line of many rooms they flow like text. */
+.exam-rooms a:not(.button) {
+  display: inline;
+}
+
+.exam-signed-up svg {
+  vertical-align: -2px;
+}
+
+.task-list + .task-list {
+  margin-top: -6px;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.exams-note {
+  margin-top: 0;
+}
+
+.event-details.exam-details {
+  width: 360px;
+}
+
+.exam-details .info-list {
+  grid-template-columns: 84px 1fr;
+}
+
+/* Exams you aren't registered for yet: dashed and only tinted, unlike the ones from your TISS calendar. */
+.fc .kind-exam-option {
+  border-width: 2px;
+  border-style: dashed;
+}
+
+.fc .kind-exam-window {
+  border-left-width: 3px;
 }
 
 /* ---------- Notes ---------- */

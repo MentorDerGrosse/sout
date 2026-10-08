@@ -78,7 +78,7 @@ function menu(): Menu {
   ])
 }
 
-/** How many deadlines are within the next 24 hours; the icon shows a red dot (macOS: the number). */
+/** How many deadlines (assignments, exam registrations) end within 24 hours; the icon shows a red dot (macOS: the number). */
 export function setTrayUrgent(count: number): void {
   if (count === urgent) return
   urgent = count
@@ -91,5 +91,5 @@ function showStatus(): void {
   if (!tray) return
   tray.setImage(trayImage())
   if (process.platform === 'darwin') tray.setTitle(urgent > 0 ? String(urgent) : '')
-  tray.setToolTip(urgent > 0 ? `sout – ${urgent} ${urgent === 1 ? 'Abgabe' : 'Abgaben'} in den nächsten 24 Stunden` : 'sout')
+  tray.setToolTip(urgent > 0 ? `sout – ${urgent} ${urgent === 1 ? 'Frist endet' : 'Fristen enden'} in den nächsten 24 Stunden` : 'sout')
 }

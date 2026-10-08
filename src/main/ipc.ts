@@ -3,6 +3,7 @@ import { IPC, isView, type AppInfo, type CoursePatch, type NewNote, type Result,
 import { autostartFile, isAutostartEnabled, setAutostart } from './autostart'
 import { calendarChanged, calendarData, clearCalendar, syncCalendar, updateCourse } from './calendar'
 import { changes, dismissChange } from './changes'
+import { dismissExam, examsData, syncExams } from './exams'
 import { chooseNotesDir, createNote, importPdfs, moveNote, noteForEvent, noteForTask, quickNote, setupNotes } from './courseNotes'
 import { flushNote, notesData, readNote, renameNote, searchNotes, showInFolder, trashNote, writeNote } from './notes'
 import { addOwnEvent, deleteOwnEvent, updateOwnEvent } from './ownEvents'
@@ -131,6 +132,17 @@ export function registerIpc(): void {
   ipcMain.handle(IPC.dismissChange, (_event, id: unknown) => {
     dismissChange(stringOrNull(id))
     return changes()
+  })
+  ipcMain.handle(IPC.getExams, () => examsData())
+  ipcMain.handle(IPC.syncExams, async () => {
+    // The calendar first: it says what you are registered for.
+    await syncCalendar()
+    await syncExams(true)
+    return examsData()
+  })
+  ipcMain.handle(IPC.dismissExam, (_event, id: unknown, dismissed: unknown) => {
+    dismissExam(text(id), dismissed === true)
+    return examsData()
   })
   ipcMain.handle(IPC.getTasks, () => tasksData())
   ipcMain.handle(IPC.syncTasks, async () => {

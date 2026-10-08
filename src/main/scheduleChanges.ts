@@ -2,8 +2,8 @@ import type { CalendarEvent, Course } from '../shared/types'
 import { roomName } from '../shared/tu'
 import type { NewChange } from './changes'
 
-// Compares two TISS syncs: moved appointments, room changes, dropped ones, new ones and new exam
-// dates. Only what is coming up in the next two weeks – plus every new exam date.
+// Compares two TISS syncs: moved appointments, room changes, dropped ones, new ones and exam
+// registrations. Only what is coming up in the next two weeks – plus every exam registered for.
 
 const SOON_MS = 14 * 24 * 60 * 60_000
 /** More dropped appointments of one course than this: probably deregistered, one summary. */
@@ -62,7 +62,8 @@ export function scheduleChanges(before: CalendarEvent[], after: CalendarEvent[],
   for (const [id, event] of next) {
     if (old.has(id)) continue
     if (event.kind === 'exam' && Date.parse(event.start) > now.getTime()) {
-      found.push({ kind: 'exam', title: `Neuer Prüfungstermin: ${courseName(event.courseKey)}`, detail: `${event.detail ?? 'Prüfung'} – ${when(event)}${where(event)}`, view: 'calendar', url: null })
+      // Exam dates reach the TISS calendar when you register for them.
+      found.push({ kind: 'exam', title: `Zur Prüfung angemeldet: ${courseName(event.courseKey)}`, detail: `${event.detail ?? 'Prüfung'} – ${when(event)}${where(event)}`, view: 'calendar', url: null })
     } else if (soon(event)) {
       found.push({ kind: 'added', title: `Neuer Termin: ${label(event)}`, detail: `${when(event)}${where(event)}`, view: 'calendar', url: null })
     }

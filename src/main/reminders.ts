@@ -1,7 +1,9 @@
 import { app, Notification } from 'electron'
 import { join } from 'node:path'
-import type { Task } from '../shared/types'
+import { EXAM_URGENT_MS, examStatus } from '../shared/exams'
+import type { ExamDate, Task } from '../shared/types'
 import { calendarData } from './calendar'
+import { examsData } from './exams'
 import { readJson, writeJson } from './jsonFile'
 import { resourcePath } from './paths'
 import { getSettings } from './settings'
@@ -9,8 +11,9 @@ import { tasksData } from './tasks'
 import { setTrayUrgent } from './tray'
 import { showMain } from './windows'
 
-// Deadline reminders as desktop notifications, e.g. 1 day and 3 hours before (configurable).
-// Which reminders were shown is remembered in reminders.json, so a restart doesn't repeat them.
+// Deadline reminders as desktop notifications, e.g. 1 day and 3 hours before (configurable) – for
+// assignments and tests and for exam registrations in TISS (also when one opens). Which reminders
+// were shown is remembered in reminders.json, so a restart doesn't repeat them.
 
 const file = (): string => join(app.getPath('userData'), 'reminders.json')
 
@@ -36,7 +39,9 @@ export function refreshUrgent(): void {
     const due = Date.parse(task.due)
     return due > now && due - now <= DAY_MS
   })
-  setTrayUrgent(urgent.length)
+  // Exam registrations that close within a day and you aren't registered for.
+  const closing = examsData().exams.filter((exam) => examStatus(exam, now) === 'open' && exam.closes && Date.parse(exam.closes) - now <= EXAM_URGENT_MS)
+  setTrayUrgent(urgent.length + closing.length)
 }
 
 function check(): void {
@@ -71,6 +76,33 @@ function check(): void {
       if (!shown[key]) {
         shown[key] = task.due
         changed = true
+      }
+    }
+  }
+
+  if (settings.notifyExamRegistration) {
+    for (const exam of examsData().exams) {
+      // Open now and not registered (nor marked as not needed).
+      if (examStatus(exam, now) !== 'open') continue
+      if (exam.opens) {
+        const key = `exam:${exam.id}|opens|${exam.opens}`
+        if (now - Date.parse(exam.opens) < OPENED_WINDOW_MS && !shown[key]) {
+          notifyExamOpened(exam)
+          shown[key] = exam.opens
+          changed = true
+        }
+      }
+      if (!exam.closes || offsets.length === 0) continue
+      const closes = Date.parse(exam.closes)
+      const reached = offsets.filter((minutes) => now >= closes - minutes * 60_000)
+      if (reached.length === 0) continue
+      const keys = reached.map((minutes) => `exam:${exam.id}|${exam.closes}|${minutes}`)
+      if (!shown[keys[keys.length - 1]!]) notifyExamClosing(exam, closes - now)
+      for (const key of keys) {
+        if (!shown[key]) {
+          shown[key] = exam.closes
+          changed = true
+        }
       }
     }
   }
@@ -111,6 +143,39 @@ function notifyOpened(task: Task): void {
     icon: resourcePath('icon.png')
   })
   notification.on('click', () => showMain('deadlines'))
+  notification.show()
+}
+
+const dateFormat = new Intl.DateTimeFormat('de-AT', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+const dayFormat = new Intl.DateTimeFormat('de-AT', { weekday: 'short', day: 'numeric', month: 'short' })
+
+/** "EB · Test 1" */
+function examLabel(exam: ExamDate): string {
+  const course = calendarData().courses.find((c) => c.key === exam.courseKey)?.shortName ?? exam.courseKey
+  return `${course} · ${exam.name}`
+}
+
+/** "Prüfung Do., 17. Dez., 10:00" */
+const examWhen = (exam: ExamDate): string => `Prüfung ${(exam.allDay ? dayFormat : dateFormat).format(new Date(exam.start))}`
+
+function notifyExamOpened(exam: ExamDate): void {
+  const until = exam.closes ? ` bis ${dateFormat.format(new Date(exam.closes))}` : ''
+  const notification = new Notification({
+    title: `Prüfungsanmeldung offen: ${examLabel(exam)}`,
+    body: `Anmelden ${exam.registration ?? ''}${until}`.replace(/\s+/g, ' ') + ` – ${examWhen(exam)}`,
+    icon: resourcePath('icon.png')
+  })
+  notification.on('click', () => showMain('exams'))
+  notification.show()
+}
+
+function notifyExamClosing(exam: ExamDate, remainingMs: number): void {
+  const notification = new Notification({
+    title: `Prüfungsanmeldung endet in ${remaining(remainingMs)}: ${examLabel(exam)}`,
+    body: `Anmeldeschluss ${dateFormat.format(new Date(exam.closes!))} – ${examWhen(exam)}`,
+    icon: resourcePath('icon.png')
+  })
+  notification.on('click', () => showMain('exams'))
   notification.show()
 }
 

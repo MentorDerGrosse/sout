@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import { CalendarDays, Check, ClipboardList, Maximize2, NotebookPen, Settings } from 'lucide-react'
 import { DayPlan } from './DayPlan'
+import { ExamList } from './ExamList'
 import { TaskList } from './TaskList'
 import { nextUp, useTasks } from './lib/tasks'
 import { useCalendar } from './lib/calendar'
+import { examsDueSoon, useExams } from './lib/exams'
 import { formatShortDate } from './lib/dates'
 import { useAppState, useNow } from './lib/hooks'
 
@@ -14,7 +16,10 @@ export default function Mini() {
   const tissConnected = state?.secrets.tissToken ?? false
   const calendar = useCalendar()
   const tasks = useTasks()
-  const due = tasks ? nextUp(tasks, now, 3) : []
+  const exams = useExams()
+  // Exam registrations that end soon come first; three rows in all, so the day plan keeps its room.
+  const registrations = exams ? examsDueSoon(exams.exams, now).slice(0, 2) : []
+  const due = tasks ? nextUp(tasks, now, 3 - registrations.length) : []
 
   return (
     <div className="mini">
@@ -46,9 +51,10 @@ export default function Mini() {
         <h3>
           <ClipboardList size={13} /> Fällig
         </h3>
+        {registrations.length > 0 && <ExamList exams={registrations} calendar={calendar} now={now} short />}
         {due.length > 0 ? (
           <TaskList tasks={due} calendar={calendar} now={now} />
-        ) : tasks?.connected ? (
+        ) : registrations.length > 0 ? null : tasks?.connected ? (
           <p className="mini-empty">Nichts offen.</p>
         ) : (
           <p className="mini-empty">

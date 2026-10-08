@@ -401,7 +401,7 @@ function RemindersSection({ settings }: { settings: Settings }) {
       <div className="rows">
         <div className="row column">
           <div className="row-text">
-            <div className="row-title">Vor Abgaben und Tests erinnern</div>
+            <div className="row-title">Vor Abgaben, Tests und Anmeldeschlüssen erinnern</div>
             <div className="row-desc">Als Benachrichtigung, solange sout läuft – auch im Hintergrund.</div>
           </div>
           <div className="reminder-choices">
@@ -430,8 +430,22 @@ function RemindersSection({ settings }: { settings: Settings }) {
         </div>
         <div className="row">
           <div className="row-text">
+            <div className="row-title">An Prüfungsanmeldungen erinnern</div>
+            <div className="row-desc">
+              Wenn in TISS die Anmeldung zu einer Prüfung deiner LVAs aufmacht und vor dem Anmeldeschluss (zu den Zeiten oben), solange du nicht
+              angemeldet bist. Dazu neue Prüfungstermine, die TISS einträgt.
+            </div>
+          </div>
+          <Toggle
+            label="An Prüfungsanmeldungen erinnern"
+            checked={settings.notifyExamRegistration}
+            onChange={(value) => void window.sout.updateSettings({ notifyExamRegistration: value })}
+          />
+        </div>
+        <div className="row">
+          <div className="row-text">
             <div className="row-title">Änderungen im Stundenplan melden</div>
-            <div className="row-desc">Raumwechsel, verschobene oder entfallene Termine der nächsten zwei Wochen, neue Prüfungstermine.</div>
+            <div className="row-desc">Raumwechsel, verschobene oder entfallene Termine der nächsten zwei Wochen und deine Prüfungsanmeldungen, sobald sie im TISS-Kalender stehen.</div>
           </div>
           <Toggle label="Änderungen im Stundenplan melden" checked={settings.notifyChanges} onChange={(value) => void window.sout.updateSettings({ notifyChanges: value })} />
         </div>

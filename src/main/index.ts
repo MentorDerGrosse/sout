@@ -4,12 +4,28 @@ import { refreshAutostart, startedByAutostart } from './autostart'
 import { startChanges } from './changes'
 import { startCalendarSync } from './calendar'
 import { syncCourseFolders } from './courseNotes'
+import { startExamSync, syncExams } from './exams'
 import { startNotesWatch } from './notes'
 import { handleNotesScheme, registerNotesScheme } from './notesProtocol'
 import { refreshUrgent, startReminders } from './reminders'
 import { registerIpc } from './ipc'
 import { getSettings } from './settings'
-import { dumpGrades, dumpTiss, dumpTuwel, gradesDumpFile, isTuwelProbe, probeTuwel, runSmokeTest, smokeTestDir, tissDumpFile, tryRenewal, tryRenewalArg, tuwelDumpFile } from './smoke'
+import {
+  dumpExams,
+  dumpGrades,
+  dumpTiss,
+  dumpTuwel,
+  examsDumpFile,
+  gradesDumpFile,
+  isTuwelProbe,
+  probeTuwel,
+  runSmokeTest,
+  smokeTestDir,
+  tissDumpFile,
+  tryRenewal,
+  tryRenewalArg,
+  tuwelDumpFile
+} from './smoke'
 import { fixCursorSize, missingStartupArgs, trayHostAvailable } from './system'
 import { startTasksSync } from './tasks'
 import { createTray, ensureTray } from './tray'
@@ -35,6 +51,7 @@ const smokeDir = smokeTestDir(process.argv)
 const dumpFile = tissDumpFile(process.argv)
 const tuwelDump = tuwelDumpFile(process.argv)
 const gradesDump = gradesDumpFile(process.argv)
+const examsDump = examsDumpFile(process.argv)
 
 if (missingArgs.length > 0) {
   // An AppImage runs from a temporary mount that is gone after exit: start the AppImage file itself again.
@@ -48,6 +65,8 @@ if (missingArgs.length > 0) {
   void dumpTuwel(tuwelDump)
 } else if (gradesDump) {
   void dumpGrades(gradesDump)
+} else if (examsDump) {
+  void dumpExams(examsDump)
 } else if (isTuwelProbe(process.argv)) {
   void probeTuwel()
 } else if (tryRenewalArg(process.argv)) {
@@ -86,6 +105,13 @@ async function start(): Promise<void> {
     broadcast(IPC.calendarChanged)
     // New courses get their notes folder (once the notes are set up).
     syncCourseFolders()
+    // A new course: read its exam dates. A new entry in the calendar may be an exam registration.
+    void syncExams()
+    refreshUrgent()
+  })
+  startExamSync(() => {
+    broadcast(IPC.examsChanged)
+    refreshUrgent()
   })
   startTasksSync(() => {
     broadcast(IPC.tasksChanged)

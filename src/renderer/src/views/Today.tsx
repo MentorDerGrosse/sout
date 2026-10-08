@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react'
 import { Bell, CalendarClock, CalendarDays, CalendarPlus, CalendarX2, Circle, CircleCheck, ClipboardList, Clock, DoorOpen, GraduationCap, PartyPopper, X, type LucideIcon } from 'lucide-react'
-import type { Change, View } from '../../../shared/types'
+import type { CalendarData, Change, View } from '../../../shared/types'
 import { ago, useChanges } from '../lib/changes'
 import { EventList } from '../EventList'
+import { ExamList } from '../ExamList'
+import { examsToAct, useExams } from '../lib/exams'
 import { TaskList } from '../TaskList'
 import { nextUp, useTasks } from '../lib/tasks'
 import { holidayOn, upcoming, useCalendar } from '../lib/calendar'
@@ -34,6 +36,7 @@ export default function Today({ onNavigate }: { onNavigate: (view: View) => void
 
       <div className="grid">
         <News now={now} onNavigate={onNavigate} />
+        <ExamRegistrations calendar={calendar} now={now} onNavigate={onNavigate} />
 
         <section className="card">
           <h2 className="card-title">
@@ -198,6 +201,24 @@ function News({ now, onNavigate }: { now: Date; onNavigate: (view: View) => void
         })}
       </ul>
       {changes.length > 8 && <p className="section-hint">und {changes.length - 8} weitere</p>}
+    </section>
+  )
+}
+
+/** Exam registrations open now or opening within a week – only when there are some. */
+function ExamRegistrations({ calendar, now, onNavigate }: { calendar: CalendarData | null; now: Date; onNavigate: (view: View) => void }) {
+  const data = useExams()
+  const exams = data ? examsToAct(data.exams, now, 7) : []
+  if (exams.length === 0) return null
+  return (
+    <section className="card span-2">
+      <h2 className="card-title">
+        <GraduationCap size={16} /> Prüfungsanmeldungen
+      </h2>
+      <ExamList exams={exams.slice(0, 4)} calendar={calendar} now={now} />
+      <button type="button" className="link" onClick={() => onNavigate('exams')}>
+        {exams.length > 4 ? `Alle Prüfungen (${exams.length} Anmeldungen offen oder bald)` : 'Alle Prüfungen'}
+      </button>
     </section>
   )
 }

@@ -16,7 +16,8 @@ export interface IcalEvent {
   end: IcalDate
 }
 
-const DEFAULT_ZONE = 'Europe/Vienna'
+/** TISS gives local times in Vienna. */
+export const TISS_ZONE = 'Europe/Vienna'
 
 export function parseIcal(text: string): IcalEvent[] {
   // Long lines are folded: a line break followed by a space or tab continues the previous line.
@@ -72,13 +73,13 @@ function parseDate(value: string, params: string): IcalDate {
   const [, y, mo, d, h, mi, s, utc] = match
   if (h === undefined) return { value: `${y}-${mo}-${d}`, allDay: true }
   const parts = [y, mo, d, h, mi, s].map(Number) as [number, number, number, number, number, number]
-  const zone = /TZID=([^;]+)/.exec(params)?.[1] ?? DEFAULT_ZONE
+  const zone = /TZID=([^;]+)/.exec(params)?.[1] ?? TISS_ZONE
   const ms = utc ? Date.UTC(parts[0], parts[1] - 1, parts[2], parts[3], parts[4], parts[5]) : zonedToUtc(parts, zone)
   return { value: new Date(ms).toISOString(), allDay: false }
 }
 
 /** Local wall-clock time in a time zone → UTC milliseconds. */
-function zonedToUtc([y, mo, d, h, mi, s]: [number, number, number, number, number, number], zone: string): number {
+export function zonedToUtc([y, mo, d, h, mi, s]: [number, number, number, number, number, number], zone: string): number {
   const wallClock = Date.UTC(y, mo - 1, d, h, mi, s)
   // Two rounds, so times right after a DST switch use the offset that applies at that moment.
   let guess = wallClock - offset(wallClock, zone)

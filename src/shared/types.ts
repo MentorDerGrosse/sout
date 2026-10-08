@@ -1,8 +1,8 @@
 // Contract between the main process and the UI. The preload script exposes SoutApi as window.sout.
 
-export type View = 'today' | 'calendar' | 'deadlines' | 'notes' | 'settings'
+export type View = 'today' | 'calendar' | 'deadlines' | 'exams' | 'notes' | 'settings'
 
-const VIEWS: readonly string[] = ['today', 'calendar', 'deadlines', 'notes', 'settings']
+const VIEWS: readonly string[] = ['today', 'calendar', 'deadlines', 'exams', 'notes', 'settings']
 
 export function isView(value: unknown): value is View {
   return typeof value === 'string' && VIEWS.includes(value)
@@ -28,6 +28,8 @@ export interface Settings {
   notifyNewTasks: boolean
   /** Look for new grades in TUWEL and notify. */
   notifyGrades: boolean
+  /** Exam registrations in TISS: notify when they open, remind before they close, report new exam dates. */
+  notifyExamRegistration: boolean
 }
 
 /** Reminder times offered in the settings: minutes before a deadline → label. */
@@ -141,6 +143,58 @@ export interface CalendarData {
   syncedAt: string | null
   /** Message of the last failed sync, null if it worked. */
   error: string | null
+  syncing: boolean
+}
+
+/** A room of an exam date. */
+export interface ExamRoom {
+  /** As TISS calls it, e.g. "GM 1 Audi. Max.- ARCH-INF". */
+  name: string
+  /** For the TUW-Maps link; null if unknown. */
+  mapCode: string | null
+  address: string | null
+}
+
+/** An exam date of one of your courses, from the course's public TISS page – with its registration window. */
+export interface ExamDate {
+  /** LVA number, day, time and name. */
+  id: string
+  courseKey: string
+  /** Semester of the course page it is listed on, e.g. "2026W". */
+  semester: string
+  /** As TISS lists it ("Test 1", "Zwischentest"); some courses put the examiner's name here. */
+  name: string
+  /** "schriftlich", "mündlich" … */
+  mode: string | null
+  /** ISO date-times; for exams without a time 00:00–23:59 of that day. */
+  start: string
+  end: string
+  allDay: boolean
+  rooms: ExamRoom[]
+  /** Registration window (ISO); null where TISS gives none. */
+  opens: string | null
+  closes: string | null
+  /** How to register, as TISS says, e.g. "in TISS". */
+  registration: string | null
+  /** It is in your TISS calendar: you are registered. */
+  registered: boolean
+  /**
+   * Not needed although you aren't registered for it – why: registered for another exam of the
+   * course at the same time or another date of the same exam, or you took that exam already.
+   */
+  covered: string | null
+  /** Marked as not needed in sout: no reminders, not on "Heute" or in the calendar. */
+  dismissed: boolean
+}
+
+export interface ExamsData {
+  /** Upcoming exam dates of the courses in the TISS calendar (hidden courses left out), by date. */
+  exams: ExamDate[]
+  /** Course pages that couldn't be read the last time. */
+  failed: { courseKey: string; error: string }[]
+  /** How many course pages sout looks at. */
+  courses: number
+  syncedAt: string | null
   syncing: boolean
 }
 
@@ -297,6 +351,12 @@ export interface SoutApi {
   /** One change, or with null all. */
   dismissChange(id: string | null): Promise<Change[]>
   onChangesChanged(listener: () => void): () => void
+  getExams(): Promise<ExamsData>
+  /** Reads the TISS calendar and the course pages again now. */
+  syncExams(): Promise<ExamsData>
+  /** "Brauche ich nicht" – or with false back again. */
+  dismissExam(id: string, dismissed: boolean): Promise<ExamsData>
+  onExamsChanged(listener: () => void): () => void
   getNotes(): Promise<NotesData>
   /** Creates the notes folder (null: the suggested one) with Inbox and course folders. */
   setupNotes(dir: string | null): Promise<Result<NotesData>>
@@ -362,6 +422,10 @@ export const IPC = {
   getChanges: 'sout:get-changes',
   dismissChange: 'sout:dismiss-change',
   changesChanged: 'sout:changes-changed',
+  getExams: 'sout:get-exams',
+  syncExams: 'sout:sync-exams',
+  dismissExam: 'sout:dismiss-exam',
+  examsChanged: 'sout:exams-changed',
   getNotes: 'sout:get-notes',
   setupNotes: 'sout:setup-notes',
   chooseNotesDir: 'sout:choose-notes-dir',

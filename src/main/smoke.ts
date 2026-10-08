@@ -1,12 +1,14 @@
 import { app, BrowserWindow, Menu, nativeTheme, net, screen } from 'electron'
 import { execFile } from 'node:child_process'
-import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { examStatus } from '../shared/exams'
 import { IPC, type View } from '../shared/types'
 import { autostartEntry } from './autostart'
 import { calendarChanged, calendarData, startCalendarSync, syncCalendar } from './calendar'
 import { changes, startChanges } from './changes'
 import { importPdfs, noteForEvent, noteForTask, quickNote, setupNotes } from './courseNotes'
+import { examsData, startExamSync, syncExams } from './exams'
 import { notesData, searchNotes, startNotesWatch, writeNote } from './notes'
 import { handleNotesScheme } from './notesProtocol'
 import { addOwnEvent } from './ownEvents'
@@ -79,7 +81,11 @@ export async function runSmokeTest(dir: string): Promise<void> {
     startChanges(() => broadcast(IPC.changesChanged))
     startCalendarSync(() => broadcast(IPC.calendarChanged))
     startTasksSync(() => broadcast(IPC.tasksChanged))
+    startExamSync(() => broadcast(IPC.examsChanged))
     await Promise.all([syncCalendar(), syncTasks()])
+    // The course pages after the calendar: it says which courses are yours.
+    await syncExams(true)
+    report['exams'] = { first: examReport() }
     addSampleOwnEvents()
     report['trayHost'] = await trayHostAvailable()
     createTray(report['trayHost'] as boolean | null)
@@ -95,7 +101,7 @@ export async function runSmokeTest(dir: string): Promise<void> {
     await delay(1000)
 
     const screenshots: Record<string, string> = { mini: await screenshot(mini, dir, 'mini') }
-    for (const view of ['today', 'calendar', 'deadlines', 'settings'] satisfies View[]) {
+    for (const view of ['today', 'calendar', 'deadlines', 'exams', 'settings'] satisfies View[]) {
       main.webContents.send(IPC.navigate, view)
       await delay(500)
       screenshots[view] = await screenshot(main, dir, view)
@@ -136,6 +142,7 @@ export async function runSmokeTest(dir: string): Promise<void> {
     await delay(300)
     screenshots['settings-bottom'] = await screenshot(main, dir, 'settings-bottom')
     Object.assign(screenshots, await smokeLayout(main, dir))
+    Object.assign(screenshots, await smokeExams(main, dir))
     Object.assign(screenshots, await smokeOwnEvents(main, dir, report))
     Object.assign(screenshots, await smokeChanges(main, mini, dir, report))
     await smokeTrayMenu(report)
@@ -154,6 +161,39 @@ export async function runSmokeTest(dir: string): Promise<void> {
     report['error'] = error instanceof Error ? error.stack : String(error)
     finish(1)
   }
+}
+
+/** Exam statuses by "<LVA number> <name>". */
+function examReport(): Record<string, string> {
+  const now = Date.now()
+  return Object.fromEntries(examsData().exams.map((exam) => [`${exam.courseKey} ${exam.name}`, examStatus(exam, now)]))
+}
+
+/** The exams page with one exam opened and the folded-away group, and an exam in the calendar. */
+async function smokeExams(main: BrowserWindow, dir: string): Promise<Record<string, string>> {
+  const shots: Record<string, string> = {}
+  const js = (code: string): Promise<unknown> => main.webContents.executeJavaScript(code)
+  main.webContents.send(IPC.navigate, 'exams')
+  await delay(600)
+  await js(`document.querySelector('.exam-card .task-body')?.click()`)
+  await delay(1500)
+  shots['exams-open'] = await screenshot(main, dir, 'exams-open')
+  await js(`document.querySelector('.task-section .group-toggle')?.click()`)
+  await delay(400)
+  await js('document.querySelector(".content").scrollTo(0, 1e6)')
+  await delay(1500)
+  shots['exams-other'] = await screenshot(main, dir, 'exams-other')
+  main.webContents.send(IPC.navigate, 'calendar')
+  await delay(600)
+  await js(`document.querySelector('.fc-dayGridMonth-button')?.click()`)
+  await delay(400)
+  await js(`document.querySelector('.fc-event.kind-exam-option')?.click()`)
+  await delay(1500)
+  shots['calendar-exam'] = await screenshot(main, dir, 'calendar-exam')
+  await js(`document.querySelector('.exam-details .icon-button')?.click()`)
+  await js(`document.querySelector('.fc-timeGridWeek-button')?.click()`)
+  await delay(300)
+  return shots
 }
 
 /** Own appointments next to the TISS ones: a weekly study group and a single study block today. */
@@ -266,6 +306,12 @@ async function smokeChanges(main: BrowserWindow, mini: BrowserWindow, dir: strin
   if (tiss) process.env['SOUT_TISS_FILE'] = tiss
   if (tuwel) process.env['SOUT_TUWEL_FILE'] = tuwel
   if (tiss || tuwel) await Promise.all([syncCalendar(), syncTasks()])
+  const pages = process.env['SOUT_SMOKE_SECOND_PAGES']
+  if (pages) {
+    process.env['SOUT_TISS_PAGES'] = pages
+    await syncExams(true)
+  }
+  ;(report['exams'] as Record<string, unknown>)['second'] = examReport()
   report['changes'] = changes().map((change) => `${change.kind}: ${change.title} – ${change.detail}`)
   main.webContents.send(IPC.navigate, 'today')
   await delay(1500)
@@ -501,6 +547,41 @@ export async function dumpTiss(file: string): Promise<void> {
   else console.error('Kein TISS-Token gespeichert.')
   profile.done()
   app.exit(token ? 0 : 1)
+}
+
+/**
+ * `--dump-exams=<file>` (development only): reads the TISS pages of the courses in the stored
+ * calendar, as the app does, and saves what came out. Prints only counts.
+ */
+export function examsDumpFile(argv: string[]): string | null {
+  const arg = argv.find((value) => value.startsWith('--dump-exams='))
+  return arg && !app.isPackaged ? arg.slice('--dump-exams='.length) : null
+}
+
+export async function dumpExams(file: string): Promise<void> {
+  const profile = useOwnProfile()
+  // A copy of the stored calendar and course settings; the running app keeps its own.
+  for (const name of ['calendar.json', 'courses.json']) {
+    const source = join(profile.realUserData, name)
+    if (existsSync(source)) cpSync(source, join(app.getPath('userData'), name))
+  }
+  await app.whenReady()
+  let code = 0
+  try {
+    await syncExams(true)
+    const data = examsData()
+    writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`)
+    const counts: Record<string, number> = {}
+    for (const exam of data.exams) counts[examStatus(exam, Date.now())] = (counts[examStatus(exam, Date.now())] ?? 0) + 1
+    console.log(`[exams] ${data.courses} LVAs, ${data.exams.length} Prüfungstermine ${JSON.stringify(counts)}, nicht lesbar: ${data.failed.length}`)
+    for (const failed of data.failed) console.log(`[exams]   ${failed.courseKey}: ${failed.error}`)
+  } catch (error) {
+    console.log(`[exams] failed: ${error instanceof Error ? error.message : String(error)}`)
+    code = 1
+  } finally {
+    profile.done()
+    app.exit(code)
+  }
 }
 
 /** `--dump-tuwel=<file>` (development only): saves what TUWEL returns, for SOUT_TUWEL_FILE. */

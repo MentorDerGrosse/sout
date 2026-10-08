@@ -1,10 +1,11 @@
 # sout
 
-Desktop-App fürs Studium an der TU Wien: Kalender aus TISS, Abgaben aus TUWEL, Notizen pro Fach.
+Desktop-App fürs Studium an der TU Wien: Kalender aus TISS, Prüfungen mit Anmeldefristen, Abgaben aus TUWEL, Notizen pro Fach.
 Läuft im Hintergrund weiter, mit einem kleinen Fenster oben rechts (wie die JetBrains Toolbox).
 
 Stand: alle Phasen bis 5 umgesetzt – Kalender aus TISS mit eigenen Terminen, Abgaben aus TUWEL, Notizen,
-Meldungen bei Änderungen, Pakete für Linux, Windows und macOS. Plan, Entscheidungen und Hintergründe: [PLAN.md](PLAN.md).
+Meldungen bei Änderungen, Pakete für Linux, Windows und macOS; dazu Prüfungstermine und Anmeldefristen.
+Plan, Entscheidungen und Hintergründe: [PLAN.md](PLAN.md).
 
 ## Installieren
 
@@ -96,6 +97,36 @@ npm run install-desktop    # Eintrag in der App-Übersicht + Befehl ~/.local/bin
 - **Tastenkürzel für die Mini-Ansicht:** GNOME-Einstellungen → Tastatur → eigene Tastenkombination, Befehl `~/.local/bin/sout --mini` (mit vollem Pfad)
 - Wieder entfernen: `npm run uninstall-desktop`
 
+## Prüfungen und Anmeldefristen
+
+Im TISS-Kalender steht eine Prüfung erst, wenn du dich angemeldet hast. Deshalb liest sout zusätzlich die
+öffentlichen TISS-Seiten deiner LVAs – nur die aus deinem TISS-Kalender, ohne ausgeblendete Fächer. Dafür braucht
+es keine Anmeldung; sout liest alle sechs Stunden, eine Seite pro Sekunde. Die Seite „Prüfungen“ zeigt dann:
+
+- **Anmeldung offen:** Was zuerst schließt, steht oben. „In TISS anmelden“ führt direkt zu den Prüfungsterminen der LVA.
+- **Anmeldung noch nicht offen:** sortiert danach, was zuerst aufmacht
+- **Angemeldet:** sobald die Prüfung in deinem TISS-Kalender steht (sout schaut stündlich nach, „Aktualisieren“ sofort)
+- **Vorbei oder nicht nötig:** In dieser Gruppe landen
+  - verpasste Fristen
+  - Termine, die du schon abgedeckt hast: dieselbe Zeit in einem anderen Raum, ein anderer Termin derselben Prüfung, oder du bist schon angetreten
+  - was du mit „Brauche ich nicht“ ausgeblendet hast
+
+Offene und bald öffnende Anmeldungen stehen auch an diesen Stellen:
+
+- auf „Heute“
+- im Kalender: die Prüfung gestrichelt, die Anmeldefrist als Balken (Filter „Anmeldungen“)
+- in der Mini-Ansicht, wenn sie in den nächsten Tagen enden
+
+sout meldet sich in diesen Fällen:
+
+- sobald eine Anmeldung aufmacht
+- vor dem Anmeldeschluss, zu denselben Zeiten wie bei den Abgaben
+- wenn TISS einen neuen Prüfungstermin einträgt
+
+Endet eine Anmeldung in den nächsten 24 Stunden, bekommt das Symbol den roten Punkt. Alles das lässt sich in den
+Einstellungen abschalten. Die Namen der Prüfungen zeigt sout so, wie TISS sie nennt; manche LVAs tragen dort den
+Namen der prüfenden Person ein.
+
 ## Notizen
 
 Notizen sind normale Markdown-Dateien in einem Ordner, den du beim ersten Öffnen von „Notizen“ festlegst
@@ -143,6 +174,7 @@ Unter Linux in `~/.config/sout/`, unter Windows in `%APPDATA%\sout\`, unter macO
 | `~/.config/sout/Partitions/tuwel/` | die TU-Wien-/TUWEL-Anmeldung (Cookies) für die stille Erneuerung; „Abmelden“ löscht sie |
 | `~/.config/sout/events.json` | eigene Termine (Lerngruppe, Lernblöcke …) |
 | `~/.config/sout/changes.json` | Neuigkeiten der letzten zwei Wochen (Raumwechsel, neue Aufgaben, Bewertungen …) |
+| `~/.config/sout/exams.json` | Prüfungstermine und Anmeldefristen von den TISS-Seiten deiner LVAs; was du mit „Brauche ich nicht“ ausgeblendet hast |
 | `~/.config/autostart/sout.desktop` | nur unter Linux und nur wenn Autostart an ist (Windows/macOS: Anmeldeobjekte des Systems) |
 
 ## Startschalter: XWayland und Deutsch (Linux)
@@ -164,11 +196,13 @@ npm run build
 npm run smoke              # unter Linux ohne Bildschirm: xvfb-run -a npm run smoke
 ```
 
-Erzeugt erfundene Testdaten (Fächer wie „Beispielkunde“, Abgaben, eine zweite Synchronisierung mit Raumwechsel,
-verschobenem und entfallenem Termin, neuem Prüfungstermin und neuer Aufgabe), startet sout unsichtbar damit, legt
+Erzeugt erfundene Testdaten: Fächer wie „Beispielkunde“, Abgaben, TISS-LVA-Seiten mit Prüfungen und Anmeldefristen
+und eine zweite Synchronisierung. Diese bringt einen Raumwechsel, einen verschobenen und einen entfallenen Termin, eine
+Prüfungsanmeldung, einen neuen Prüfungstermin und eine neue Aufgabe. sout startet unsichtbar damit, legt
 Screenshots der Ansichten und `report.json` in `smoke/` ab und meldet, ob alles geklappt hat. Geprüft wird unter
 anderem das Speichern der Notizen (von selbst, bei Änderungen von außen, bei Konflikten, beim Schließen), das
-Erkennen von Änderungen und dass PDFs nur aus dem Notizordner kommen. Nutzt einen eigenen Datenordner und nicht den
+Erkennen von Änderungen, wie sout jede Prüfung einordnet (offen, angemeldet, nicht nötig …) und dass PDFs nur aus dem
+Notizordner kommen. Nutzt einen eigenen Datenordner und nicht den
 Schlüsselbund.
 
 Ohne Testdaten geht es auch direkt: `node_modules/electron/dist/electron . --smoke-test=<ordner>` (unter Linux mit
@@ -184,6 +218,8 @@ Hilfen für die Entwicklung (nur ungepackt):
 | `SOUT_TUWEL_FILE=<datei>` | nimmt diese JSON-Datei statt TUWEL |
 | `--probe-tuwel` | prüft, ob TUWEL den gespeicherten Schlüssel noch annimmt (gibt nur „gültig“/„abgelehnt“ aus) |
 | `--dump-grades=<datei>` | holt still einen frischen Schlüssel und die Bewertungen; gibt nur deren Aufbau aus |
+| `--dump-exams=<datei>` | liest die TISS-Seiten der LVAs aus deinem Kalender wie die App und speichert die Prüfungen als JSON; gibt nur Zahlen aus |
+| `SOUT_TISS_PAGES=<ordner>` | nimmt die LVA-Seiten aus diesem Ordner (`123456.html` für 123.456) statt von TISS |
 | `SOUT_SMOKE_THEME=light` | Testlauf im hellen statt dunklen Modus |
 
 ## Lizenz
