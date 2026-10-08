@@ -140,6 +140,7 @@ if (report.notes?.protocol?.pdf !== 200 || report.notes?.protocol?.outside !== 4
 if (report.trayMenu && typeof report.trayMenu === 'object') {
   for (const [check, ok] of Object.entries(report.trayMenu)) if (!ok) problems.push(`Tray-Menü: ${check} fehlgeschlagen`)
 }
+if (report.miniAfterClose === false) problems.push('Nach dem Schließen des Hauptfensters ist die Mini-Ansicht nicht aufgegangen')
 const failedShots = Object.entries(report.screenshots ?? {}).filter(([, result]) => !/^\d+x\d+$/.test(result))
 if (failedShots.length > 0) problems.push(`Screenshots: ${failedShots.map(([name, result]) => `${name} (${result})`).join(', ')}`)
 

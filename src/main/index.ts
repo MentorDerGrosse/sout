@@ -13,7 +13,7 @@ import { dumpGrades, dumpTiss, dumpTuwel, gradesDumpFile, isTuwelProbe, probeTuw
 import { fixCursorSize, missingStartupArgs, trayHostAvailable } from './system'
 import { startTasksSync } from './tasks'
 import { createTray, ensureTray } from './tray'
-import { broadcast, createMiniWindow, notifyRunningInBackground, setOnMainClosed, showMain, syncDock, toggleMini } from './windows'
+import { broadcast, createMiniWindow, miniTakesOver, notifyRunningInBackground, setOnMainClosed, showMain, syncDock, toggleMini } from './windows'
 
 /** `sout --mini` toggles the mini window – meant for a GNOME keyboard shortcut. */
 const MINI_ARG = '--mini'
@@ -147,5 +147,6 @@ async function onMainClosed(): Promise<void> {
     return
   }
   ensureTray(trayHost)
+  miniTakesOver()
   notifyRunningInBackground()
 }

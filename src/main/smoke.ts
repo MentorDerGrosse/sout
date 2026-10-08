@@ -22,7 +22,7 @@ import { getSecret, secretsStatus } from './secrets'
 import { trayHostAvailable, windowSystem } from './system'
 import { fetchTissFeed } from './tiss'
 import { createTray, trayUrgent } from './tray'
-import { broadcast, createMainWindow, createMiniWindow, isMiniVisible } from './windows'
+import { broadcast, createMainWindow, createMiniWindow, isMiniVisible, miniTakesOver, setOnMainClosed } from './windows'
 
 // `--smoke-test=<dir>`: starts everything without showing a window, takes screenshots of the views,
 // writes report.json and quits. Uses its own data folder and no keyring, so it also works on an
@@ -87,6 +87,8 @@ export async function runSmokeTest(dir: string): Promise<void> {
     report['trayUrgent'] = trayUrgent()
     const mini = createMiniWindow()
     const main = createMainWindow('today', false)
+    // As in the app: closing the main window hands over to the mini view.
+    setOnMainClosed(miniTakesOver)
     // Hidden windows otherwise stop painting, and screenshots show an old frame.
     for (const win of [mini, main]) win.webContents.setBackgroundThrottling(false)
     await Promise.all([loaded(mini), loaded(main)])
@@ -138,6 +140,8 @@ export async function runSmokeTest(dir: string): Promise<void> {
     Object.assign(screenshots, await smokeChanges(main, mini, dir, report))
     await smokeTrayMenu(report)
     Object.assign(screenshots, await smokeNotes(main, mini, dir, report))
+    // smokeNotes ends by closing the main window.
+    report['miniAfterClose'] = isMiniVisible()
     report['screenshots'] = screenshots
 
     const display = screen.getPrimaryDisplay()
@@ -186,9 +190,15 @@ async function smokeTrayMenu(report: Record<string, unknown>): Promise<void> {
     report['trayMenu'] = 'kein Tray-Eintrag auf dem Sitzungsbus'
     return
   }
+  // Only the start-up so far: GNOME has picked up the icon, nothing was clicked.
+  const atStart = isMiniVisible()
   const menu = (method: string, ...args: string[]): Promise<string> =>
     // "--": arguments like -1 are not options of gdbus.
     run(['gdbus', 'call', '--session', '--dest', owner, '--object-path', '/com/canonical/dbusmenu', '--method', `com.canonical.dbusmenu.${method}`, '--', ...args])
+  // What the extension sends when it picks up the icon – that must not open the mini view.
+  await menu('AboutToShow', '0')
+  await delay(1200)
+  const quietOnPickup = !isMiniVisible()
   await menu('Event', '0', 'opened', '<int32 0>', '0')
   await delay(1200)
   const shownWithMenu = isMiniVisible()
@@ -196,7 +206,7 @@ async function smokeTrayMenu(report: Record<string, unknown>): Promise<void> {
   const tickedInMenu = Boolean(item && /'toggle-state': <1>/.test(item[0]))
   if (item) await menu('Event', item[1]!, 'clicked', '<int32 0>', '0')
   await delay(800)
-  report['trayMenu'] = { shownWithMenu, tickedInMenu, closedFromMenu: !isMiniVisible() }
+  report['trayMenu'] = { closedAtStart: !atStart, quietOnPickup, shownWithMenu, tickedInMenu, closedFromMenu: !isMiniVisible() }
 }
 
 /** Drags a resize handle like a mouse would. */

@@ -51,6 +51,19 @@ export default function SettingsView() {
             />
           </div>
           <div className="row">
+            <div className="row-text">
+              <div className="row-title">Beim Schließen die Mini-Ansicht zeigen</div>
+              <div className="row-desc">
+                Schließt du das Hauptfenster, wird sout zum kleinen Fenster beim Symbol. Ein Klick daneben schickt es ins Symbol.
+              </div>
+            </div>
+            <Toggle
+              label="Beim Schließen die Mini-Ansicht zeigen"
+              checked={settings.miniOnClose}
+              onChange={(value) => void window.sout.updateSettings({ miniOnClose: value })}
+            />
+          </div>
+          <div className="row">
             <TrayStatus available={info.trayAvailable} platform={info.platform} />
           </div>
           {info.platform === 'linux' && (
@@ -112,7 +125,7 @@ function TrayStatus({ available, platform }: { available: boolean | null; platfo
   if (available || platform !== 'linux') {
     return (
       <Callout kind="ok" title={`Das Symbol ${trayPlace(platform)} wird angezeigt.`}>
-        Schließen versteckt sout nur. Ein Klick aufs Symbol öffnet die Mini-Ansicht, Rechtsklick das Menü.
+        Schließen beendet sout nicht. Ein Klick aufs Symbol öffnet die Mini-Ansicht, Rechtsklick das Menü.
       </Callout>
     )
   }

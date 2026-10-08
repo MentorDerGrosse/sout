@@ -40,7 +40,6 @@ export function watchTrayMenu(onOpened: () => void): void {
     const message = parse(line)
     if (!message || !opensMenu(message)) return
     void isOwn(message.destination ?? '').then((own) => {
-      // The extension sends "opened" and "AboutToShow" for the same click.
       if (!own || Date.now() - lastOpened < 1000) return
       lastOpened = Date.now()
       onOpened()
@@ -61,11 +60,13 @@ function parse(line: string): BusMessage | null {
   }
 }
 
-/** The top-level menu (id 0) is about to show: Event(0, "opened", …) or AboutToShow(0). */
+/**
+ * The top-level menu (id 0) opened: Event(0, "opened", …). Not AboutToShow(0) – the extension
+ * sends that also when it picks up the icon (at every start), without opening anything.
+ */
 function opensMenu(message: BusMessage): boolean {
   const data = message.payload?.data ?? []
-  if (data[0] !== 0) return false
-  return (message.member === 'Event' && data[1] === 'opened') || message.member === 'AboutToShow'
+  return message.member === 'Event' && data[0] === 0 && data[1] === 'opened'
 }
 
 /** Addressed to this process? The well-known name contains our PID; unique names are looked up. */

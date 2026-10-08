@@ -207,6 +207,14 @@ export function toggleMini(anchor?: Rectangle): void {
 }
 
 /**
+ * The main window was closed: the small window takes over (like the JetBrains Toolbox) – with
+ * focus, so a click anywhere else sends it to the tray icon. Can be switched off in the settings.
+ */
+export function miniTakesOver(): void {
+  if (getSettings().miniOnClose) showMini(undefined, true)
+}
+
+/**
  * GNOME: a click on the tray icon opened its menu – the mini view comes along. It doesn't take
  * the focus from the menu, so it stays until it is unticked there ("Mini-Ansicht"), or until it
  * was clicked into and then away from.

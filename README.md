@@ -71,7 +71,8 @@ lässt dort den Testlauf laufen und legt Installer und Screenshots zum Herunterl
 ### Überall gleich
 
 - **Autostart:** in der App unter Einstellungen oder im Menü des Symbols
-- **Schließen** beendet sout nicht, es bleibt beim Symbol; ganz beenden mit Strg+Q (Mac: Cmd+Q) oder „Beenden“ im Menü
+- **Schließen** beendet sout nicht: Das Hauptfenster wird zur Mini-Ansicht beim Symbol, ein Klick daneben schickt sie
+  ins Symbol (in den Einstellungen abschaltbar). Ganz beenden mit Strg+Q (Mac: Cmd+Q) oder „Beenden“ im Menü
 
 ## Aus dem Quellcode (Entwicklung)
 
