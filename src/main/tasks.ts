@@ -2,7 +2,7 @@ import { app, Notification, powerMonitor } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { Task, TasksData, TodoInput } from '../shared/types'
+import type { CalendarEvent, Task, TasksData, TodoInput } from '../shared/types'
 import { calendarData } from './calendar'
 import { reportChanges, type NewChange } from './changes'
 import { readJson, writeJson } from './jsonFile'
@@ -10,14 +10,12 @@ import { resourcePath } from './paths'
 import { clearSecret, getSecret, hasSecret, setSecret } from './secrets'
 import { getSettings } from './settings'
 import { TuwelError, tuwelCall } from './tuwelApi'
+import { applyExtras, bookingTasks, clearTuwelExtras, fetchExtras, gradesDue, type RawExtras } from './tuwelExtras'
 import { forgetTuwelLogin, lastLoginTrace, loginToTuwel } from './tuwelLogin'
-import { fetchGrades, type Grade } from './tuwelGrades'
 import { fetchSnapshot, toTasks, type MoodleSnapshot } from './tuwelTasks'
 import { showMain } from './windows'
 
 const SYNC_INTERVAL_MS = 30 * 60 * 1000
-/** Grades change rarely – a look every two hours is plenty. */
-const GRADES_INTERVAL_MS = 2 * 60 * 60 * 1000
 
 /** What TUWEL said at the last sync (tuwel.json). */
 interface Cache {
@@ -36,9 +34,6 @@ interface Cache {
   loginTrace?: string[]
   /** Tasks already seen – anything else is new. Missing until the first sync with this version. */
   seenTaskIds?: string[]
-  /** Grades already seen (item and grading time), and when TUWEL was last asked for grades. */
-  seenGrades?: string[]
-  gradesCheckedAt?: string
 }
 
 interface Todo {
@@ -89,13 +84,35 @@ export function tasksData(): TasksData {
   const { tasks, user, syncedAt, error, expired } = loadCache()
   const local = loadLocal()
   const done = new Set(local.doneIds)
+  const events = calendarData().events
   const all: Task[] = [
-    ...tasks.map((task): Task => (done.has(task.id) ? { ...task, status: 'done' } : task)),
+    // Booking periods of Terminbuchungen count as tasks too ("Termin buchen bis …").
+    ...[...tasks, ...bookingTasks()].map((task): Task => withRoom(done.has(task.id) ? { ...task, status: 'done' } : task, events)),
     ...local.todos.map(todoTask)
   ]
   // Soonest first, tasks without a date at the end.
   all.sort((a, b) => (a.due ?? '9999').localeCompare(b.due ?? '9999'))
   return { tasks: all, connected: hasSecret('tuwelToken'), user, syncedAt, error, expired, syncing: syncing !== null }
+}
+
+/** Longer than this, a test window is an online test – not one in a lecture hall. */
+const PRESENCE_TEST_MS = 12 * 60 * 60_000
+
+/**
+ * A test in a lecture hall: the room comes from the TISS calendar – an exam slot of the course at
+ * that time, otherwise one of its appointments then. Only for short test windows.
+ */
+function withRoom(task: Task, events: CalendarEvent[]): Task {
+  if (task.module !== 'quiz' || !task.courseKey || !task.due) return task
+  const end = Date.parse(task.due)
+  const start = task.opens ? Date.parse(task.opens) : end - 2 * 60 * 60_000
+  if (end - start > PRESENCE_TEST_MS) return task
+  const candidates = events.filter(
+    (event) =>
+      event.ownId === null && event.courseKey === task.courseKey && event.location && !event.allDay && Date.parse(event.start) < end && start < Date.parse(event.end)
+  )
+  const match = candidates.find((event) => event.kind === 'exam') ?? candidates[0]
+  return match ? { ...task, room: match.location } : task
 }
 
 function todoTask(todo: Todo): Task {
@@ -137,7 +154,7 @@ export function syncTasks(): Promise<void> {
     try {
       if (!devFile && !token) return
       const fetched = devFile
-        ? { snapshot: JSON.parse(readFileSync(devFile, 'utf8')) as MoodleSnapshot, token: null }
+        ? { snapshot: JSON.parse(readFileSync(devFile, 'utf8')) as MoodleSnapshot & { extras?: RawExtras }, token: null }
         : await fetchWithFreshToken(token!)
       const tasks = toTasks(fetched.snapshot)
       const previous = loadCache()
@@ -155,7 +172,7 @@ export function syncTasks(): Promise<void> {
       forgetVanishedDone()
       // The very first time everything is "new" – nothing to report then.
       if (previous.seenTaskIds) reportChanges(tasks.filter((task) => !seen.has(task.id)).map(taskChange), getSettings().notifyNewTasks)
-      if (fetched.token) await checkGrades(fetched.token, fetched.snapshot.site.userid)
+      await syncExtras(fetched.token, fetched.snapshot.site.userid, 'extras' in fetched.snapshot ? fetched.snapshot.extras : undefined)
     } catch (error) {
       // Keep the old tasks: they are still the best we have when offline.
       const expired = isTokenError(error)
@@ -211,26 +228,21 @@ function taskChange(task: Task): NewChange {
   return { kind: 'task', title: `Neu in TUWEL: ${task.title}`, detail: parts.filter(Boolean).join(' · '), view: 'deadlines', url: null }
 }
 
-function gradeChange(grade: Grade): NewChange {
-  return { kind: 'grade', title: `Neue Bewertung: ${grade.name}`, detail: `${courseName(grade.courseKey, grade.course)}: ${grade.grade}`, view: null, url: grade.url }
-}
-
-/** Every two hours: new grades? The first look only remembers what is there. Grades are a bonus – errors are ignored. */
-async function checkGrades(token: string, userid: number): Promise<void> {
-  const cached = loadCache()
-  if (!getSettings().notifyGrades) return
-  if (cached.gradesCheckedAt && Date.now() - Date.parse(cached.gradesCheckedAt) < GRADES_INTERVAL_MS) return
+/**
+ * Announcements, Kreuzerlübungen, Terminbuchungen and (every two hours) grades – with the same
+ * token, or from the test data. A bonus: errors are ignored, the deadlines are what matters.
+ */
+async function syncExtras(token: string | null, userid: number, testData: RawExtras | undefined): Promise<void> {
+  const settings = getSettings()
   try {
-    const grades = await fetchGrades(token, userid)
-    const seen = new Set(cached.seenGrades ?? [])
-    saveCache({
-      ...loadCache(),
-      gradesCheckedAt: new Date().toISOString(),
-      seenGrades: [...new Set([...seen, ...grades.map((grade) => grade.key)])].slice(-500)
-    })
-    if (cached.seenGrades) reportChanges(grades.filter((grade) => !seen.has(grade.key)).map(gradeChange), true)
+    const courseKeys = new Set(calendarData().courses.filter((course) => !course.hidden).map((course) => course.key))
+    const raw = token ? await fetchExtras(token, userid, courseKeys, gradesDue()) : testData
+    if (!raw) return
+    const found = applyExtras(raw, settings.notifyGrades, (key, fallback) => courseName(key, fallback) ?? fallback)
+    reportChanges(found.filter((change) => change.kind === 'announcement'), settings.notifyAnnouncements)
+    reportChanges(found.filter((change) => change.kind === 'grade'), true)
   } catch (error) {
-    console.log(`[tuwel] Bewertungen nicht abgefragt: ${error instanceof Error ? error.message : String(error)}`)
+    console.log(`[tuwel] Ankündigungen, Kreuzerl und Bewertungen nicht abgefragt: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 
@@ -289,6 +301,7 @@ export async function loginTuwel(): Promise<void> {
 export function logoutTuwel(): void {
   clearSecret('tuwelToken')
   saveCache(EMPTY)
+  clearTuwelExtras()
   void forgetTuwelLogin()
 }
 

@@ -547,9 +547,20 @@ function RemindersSection({ settings }: { settings: Settings }) {
         <div className="row">
           <div className="row-text">
             <div className="row-title">Neue Bewertungen melden</div>
-            <div className="row-desc">sout schaut alle zwei Stunden in TUWEL nach neuen Noten und Punkten.</div>
+            <div className="row-desc">sout schaut alle zwei Stunden in TUWEL nach neuen Noten und Punkten (zu sehen unter „Noten“).</div>
           </div>
           <Toggle label="Neue Bewertungen melden" checked={settings.notifyGrades} onChange={(value) => void window.sout.updateSettings({ notifyGrades: value })} />
+        </div>
+        <div className="row">
+          <div className="row-text">
+            <div className="row-title">Neue Ankündigungen melden</div>
+            <div className="row-desc">Wenn in einem deiner TUWEL-Kurse eine Ankündigung erscheint (auf „Heute“ stehen die letzten zwei Wochen).</div>
+          </div>
+          <Toggle
+            label="Neue Ankündigungen melden"
+            checked={settings.notifyAnnouncements}
+            onChange={(value) => void window.sout.updateSettings({ notifyAnnouncements: value })}
+          />
         </div>
       </div>
     </section>

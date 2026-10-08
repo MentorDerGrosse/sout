@@ -12,11 +12,9 @@ import { registerIpc } from './ipc'
 import { getSettings } from './settings'
 import {
   dumpExams,
-  dumpGrades,
   dumpTiss,
   dumpTuwel,
   examsDumpFile,
-  gradesDumpFile,
   isTuwelProbe,
   probeTuwel,
   runSmokeTest,
@@ -30,6 +28,8 @@ import {
 } from './smoke'
 import { fixCursorSize, missingStartupArgs, trayHostAvailable } from './system'
 import { startTasksSync } from './tasks'
+import { startTuwelExtras } from './tuwelExtras'
+import { startStudies } from './studies'
 import { createTray, ensureTray } from './tray'
 import { applyTheme, broadcast, createMiniWindow, miniTakesOver, notifyRunningInBackground, setOnMainClosed, showMain, syncDock, toggleMini } from './windows'
 
@@ -52,7 +52,6 @@ if (process.platform === 'win32') app.setAppUserModelId(APP_ID)
 const smokeDir = smokeTestDir(process.argv)
 const dumpFile = tissDumpFile(process.argv)
 const tuwelDump = tuwelDumpFile(process.argv)
-const gradesDump = gradesDumpFile(process.argv)
 const examsDump = examsDumpFile(process.argv)
 const tuwelCallsDump = tuwelCallsFile(process.argv)
 
@@ -66,8 +65,6 @@ if (missingArgs.length > 0) {
   void dumpTiss(dumpFile)
 } else if (tuwelDump) {
   void dumpTuwel(tuwelDump)
-} else if (gradesDump) {
-  void dumpGrades(gradesDump)
 } else if (examsDump) {
   void dumpExams(examsDump)
 } else if (tuwelCallsDump) {
@@ -120,6 +117,14 @@ async function start(): Promise<void> {
     refreshUrgent()
   })
   startTasksSync(() => {
+    broadcast(IPC.tasksChanged)
+    refreshUrgent()
+  })
+  startStudies(() => broadcast(IPC.studiesChanged))
+  // Announcements, Kreuzerl, grades – and booked appointments (calendar) and booking periods (tasks).
+  startTuwelExtras(() => {
+    broadcast(IPC.tuwelExtrasChanged)
+    broadcast(IPC.calendarChanged)
     broadcast(IPC.tasksChanged)
     refreshUrgent()
   })

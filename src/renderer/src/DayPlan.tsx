@@ -58,7 +58,7 @@ function planFor(day: string, calendar: CalendarData | null, tasks: TasksData | 
       end: due.getTime(),
       time: formatTime(due.toISOString()),
       title: task.title,
-      sub: [course.name, `${task.kindLabel} ${task.dueLabel}`].filter(Boolean).join(' · '),
+      sub: [course.name, `${task.kindLabel} ${task.dueLabel}`, task.room && roomName(task.room)].filter(Boolean).join(' · '),
       color: course.color,
       deadline: true
     })

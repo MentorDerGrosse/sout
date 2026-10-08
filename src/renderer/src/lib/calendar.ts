@@ -19,7 +19,8 @@ export const KIND_LABELS: Record<EventKind, string> = {
   exam: 'Prüfung',
   holiday: 'vorlesungsfrei',
   other: 'Termin',
-  own: 'Eigener Termin'
+  own: 'Eigener Termin',
+  appointment: 'Termin aus TUWEL'
 }
 
 export const HOLIDAY_COLOR = '#8a8f98'

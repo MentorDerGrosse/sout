@@ -14,10 +14,11 @@ import { handleNotesScheme } from './notesProtocol'
 import { addOwnEvent } from './ownEvents'
 import { refreshUrgent } from './reminders'
 import { startTasksSync, syncTasks, tasksData } from './tasks'
+import { startTuwelExtras, tuwelExtras } from './tuwelExtras'
+import { startStudies, studiesData, updateStudyCourse } from './studies'
 import { readJson } from './jsonFile'
 import { TuwelError, tuwelCall } from './tuwelApi'
 import { lastLoginTrace, trySilent } from './tuwelLogin'
-import { fetchGrades } from './tuwelGrades'
 import { fetchSnapshot } from './tuwelTasks'
 import { registerIpc } from './ipc'
 import { getSecret, secretsStatus } from './secrets'
@@ -83,6 +84,12 @@ export async function runSmokeTest(dir: string): Promise<void> {
     startChanges(() => broadcast(IPC.changesChanged))
     startCalendarSync(() => broadcast(IPC.calendarChanged))
     startTasksSync(() => broadcast(IPC.tasksChanged))
+    startStudies(() => broadcast(IPC.studiesChanged))
+    startTuwelExtras(() => {
+      broadcast(IPC.tuwelExtrasChanged)
+      broadcast(IPC.calendarChanged)
+      broadcast(IPC.tasksChanged)
+    })
     startExamSync(() => broadcast(IPC.examsChanged))
     await Promise.all([syncCalendar(), syncTasks()])
     // The course pages after the calendar: it says which courses are yours.
@@ -151,6 +158,7 @@ export async function runSmokeTest(dir: string): Promise<void> {
     Object.assign(screenshots, await smokeExams(main, dir))
     Object.assign(screenshots, await smokeOwnEvents(main, dir, report))
     Object.assign(screenshots, await smokeChanges(main, mini, dir, report))
+    Object.assign(screenshots, await smokeTuwelExtras(main, dir))
     Object.assign(screenshots, await smokeThemes(main, dir))
     await smokeTrayMenu(report)
     Object.assign(screenshots, await smokeNotes(main, mini, dir, report))
@@ -168,6 +176,51 @@ export async function runSmokeTest(dir: string): Promise<void> {
     report['error'] = error instanceof Error ? error.stack : String(error)
     finish(1)
   }
+}
+
+/** Grades and ECTS, an announcement, Kreuzerl sheets, an appointment from TUWEL. */
+async function smokeTuwelExtras(main: BrowserWindow, dir: string): Promise<Record<string, string>> {
+  const shots: Record<string, string> = {}
+  const js = (code: string): Promise<unknown> => main.webContents.executeJavaScript(code)
+  const course = studiesData().courses.find((candidate) => candidate.key === '123.456')
+  if (course) updateStudyCourse(course.key, course.semester, { grade: '2' })
+  main.webContents.send(IPC.navigate, 'grades')
+  await delay(1200)
+  shots['grades'] = await screenshot(main, dir, 'grades')
+  await js(`[...document.querySelectorAll('.task-card .task-body')].at(-1)?.click()`)
+  await delay(400)
+  await js('document.querySelector(".content").scrollTo(0, 1e6)')
+  await delay(1200)
+  shots['grades-tuwel'] = await screenshot(main, dir, 'grades-tuwel')
+  main.webContents.send(IPC.navigate, 'today')
+  await delay(600)
+  await js(`document.querySelector('.announcement-head')?.click()`)
+  await delay(300)
+  await js(`document.querySelector('.announcements')?.scrollIntoView({ block: 'center' })`)
+  await delay(1200)
+  shots['today-announcement'] = await screenshot(main, dir, 'today-announcement')
+  main.webContents.send(IPC.navigate, 'deadlines')
+  await delay(600)
+  await js(`[...document.querySelectorAll('.task-body')].find((b) => b.textContent.includes('Kreuzerlübung 1'))?.click()`)
+  await js(`[...document.querySelectorAll('.task-body')].find((b) => b.textContent.includes('Kreuzerlübung 2'))?.click()`)
+  await delay(300)
+  await js(`[...document.querySelectorAll('.task-body')].find((b) => b.textContent.includes('Kreuzerlübung 2'))?.scrollIntoView({ block: 'start' })`)
+  await delay(1200)
+  shots['deadlines-kreuzerl'] = await screenshot(main, dir, 'deadlines-kreuzerl')
+  await js('document.querySelector(".content").scrollTo(0, 1e6)')
+  await delay(1200)
+  shots['deadlines-kreuzerl-past'] = await screenshot(main, dir, 'deadlines-kreuzerl-past')
+  main.webContents.send(IPC.navigate, 'calendar')
+  await delay(600)
+  await js(`document.querySelector('.fc-listMonth-button')?.click()`)
+  await delay(400)
+  await js(`document.querySelector('.fc-event.kind-appointment')?.click()`)
+  await delay(1200)
+  shots['calendar-appointment'] = await screenshot(main, dir, 'calendar-appointment')
+  await js(`document.querySelector('.event-details .icon-button')?.click()`)
+  await js(`document.querySelector('.fc-timeGridWeek-button')?.click()`)
+  await delay(300)
+  return shots
 }
 
 /** The colour schemes: the choice in the settings, then "Heute" in each scheme (and the calendar in one). */
@@ -357,6 +410,18 @@ async function smokeChanges(main: BrowserWindow, mini: BrowserWindow, dir: strin
     await syncExams(true)
   }
   ;(report['exams'] as Record<string, unknown>)['second'] = examReport()
+  const extras = tuwelExtras()
+  const quiz = tasksData().tasks.find((task) => task.module === 'quiz')
+  const sheet = extras.checkmarks.find((candidate) => candidate.name === 'Kreuzerlübung 2')
+  report['tuwel'] = {
+    announcements: extras.announcements.length,
+    checkmarks: extras.checkmarks.length,
+    gradedCourses: extras.grades.filter((course) => course.items.length > 0).length,
+    appointments: calendarData().events.filter((event) => event.kind === 'appointment').length,
+    bookings: tasksData().tasks.filter((task) => task.module === 'organizer').length,
+    testRoom: quiz?.room ?? null,
+    sheetTicked: sheet ? `${sheet.examples.filter((example) => example.checked).length} von ${sheet.examples.length}` : null
+  }
   report['changes'] = changes().map((change) => `${change.kind}: ${change.title} – ${change.detail}`)
   main.webContents.send(IPC.navigate, 'today')
   await delay(1500)
@@ -679,37 +744,6 @@ export async function probeTuwel(): Promise<void> {
   console.log(`[probe] ${new Date().toISOString()} ${result} – Schlüssel-Alter: ${age ?? '?'} min`)
   profile.done()
   app.exit(0)
-}
-
-/** `--dump-grades=<file>` (development only): fresh token via a copy of the stored login, then the grades. Prints only their shape. */
-export function gradesDumpFile(argv: string[]): string | null {
-  const arg = argv.find((value) => value.startsWith('--dump-grades='))
-  return arg && !app.isPackaged ? arg.slice('--dump-grades='.length) : null
-}
-
-export async function dumpGrades(file: string): Promise<void> {
-  const profile = useOwnProfile()
-  cpSync(join(profile.realUserData, 'Partitions', 'tuwel'), join(app.getPath('userData'), 'Partitions', 'tuwel'), { recursive: true })
-  await app.whenReady()
-  let code = 0
-  try {
-    const token = await trySilent('session')
-    const site = await tuwelCall<{ userid: number }>(token, 'core_webservice_get_site_info')
-    const courses = await tuwelCall<{ id: number; enddate?: number }[]>(token, 'core_enrol_get_users_courses', { userid: site.userid })
-    console.log(`[grades] ${courses.length} courses, fields: ${Object.keys(courses[0] ?? {}).join(', ')}`)
-    const first = courses[0] ? await tuwelCall<Record<string, unknown>>(token, 'gradereport_user_get_grade_items', { courseid: courses[0].id, userid: site.userid }) : null
-    const items = ((first?.['usergrades'] as { gradeitems?: Record<string, unknown>[] }[] | undefined)?.[0]?.gradeitems ?? [])
-    console.log(`[grades] first course: ${items.length} items, fields: ${Object.keys(items[0] ?? {}).join(', ')}`)
-    const grades = await fetchGrades(token, site.userid)
-    console.log(`[grades] graded items in current courses: ${grades.length}`)
-    writeFileSync(file, `${JSON.stringify(grades, null, 2)}\n`)
-  } catch (error) {
-    console.log(`[grades] failed: ${error instanceof Error ? error.message : String(error)}`)
-    code = 1
-  } finally {
-    profile.done()
-    app.exit(code)
-  }
 }
 
 /**

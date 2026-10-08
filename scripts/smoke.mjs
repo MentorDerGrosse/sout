@@ -49,6 +49,9 @@ function tissEvents() {
   events.push({ uid: '123.456-now', category: 'COURSE', summary: '123.456 VO Beispielkunde', start: new Date(now.getTime() - 30 * 60_000), minutes: 120, room: courses[0][3], description: 'Vorlesung' })
   events.push({ uid: '234.567-group', category: 'GROUP', summary: '234.567 VU Einführung in die Beispielmathematik - Übungsgruppe 2', start: day(1, 13), minutes: 90, room: courses[1][3] })
   events.push({ uid: '234.567-exam', category: 'EXAM_SLOT', summary: '234.567 VU Einführung in die Beispielmathematik - Test 1', start: day(21, 10), minutes: 90, room: courses[0][3] })
+  // Test 1 of 123.456 in a lecture hall – the TUWEL test (tomorrow, 2 hours) gets this room. Long, so a
+  // different time zone on the test machine (these times are local, given as Vienna time) can't miss it.
+  events.push({ uid: '123.456-test1', category: 'EXAM_SLOT', summary: '123.456 VO Beispielkunde - Test 1', start: new Date(now.getTime() + 21 * 3600_000), minutes: 480, room: 'HS 7 Ausweichsaal - BSP' })
   // Two appointments at the same time today: marked as overlapping.
   events.push({ uid: '123.456-extra', category: 'COURSE', summary: '123.456 VO Beispielkunde', start: day(0, 17), minutes: 90, room: courses[0][3], description: 'Vorlesung - Zusatztermin' })
   events.push({ uid: '345.678-extra', category: 'COURSE', summary: '345.678 UE Grundlagen der Musterrechnung', start: day(0, 17, 30), minutes: 60, room: courses[2][3], description: 'Übung - Zusatztermin' })
@@ -229,8 +232,60 @@ function tuwel(extra) {
     event(13, 'Test 1 (Online-Test im TUWEL, Zeitfenster 90 Minuten)', 'quiz', 7, 'open', 24, bk, false),
     event(14, 'Test 1 (Online-Test im TUWEL, Zeitfenster 90 Minuten)', 'quiz', 7, 'close', 26, bk, false)
   ]
+  // A Kreuzerlübung: its link carries the same id as its sheet below.
+  events.push({ ...event(16, 'Kreuzerlübung 2', 'checkmark', 3, 'due', 48, eb), url: 'https://tuwel.example/mod/checkmark/view.php?id=31' })
   if (extra) events.push(event(15, 'Übungsblatt 4', 'assign', 8, 'due', 9 * 24, eb))
-  return { site: { userid: 1, fullname: 'Test Person' }, events, assignments: [], quizzes: [], submissions: {} }
+  return { site: { userid: 1, fullname: 'Test Person' }, events, assignments: [], quizzes: [], submissions: {}, extras: tuwelExtras(extra, ts, eb, bk) }
+}
+
+/** Announcements, Kreuzerl sheets, a booked appointment and a booking period, grades – as TUWEL answers. */
+function tuwelExtras(extra, ts, eb, bk) {
+  return {
+    courses: [eb, bk],
+    forums: [
+      { id: 21, course: bk.id, type: 'news' },
+      { id: 22, course: eb.id, type: 'news' }
+    ],
+    discussions: {
+      21: [{ discussion: 501, name: 'Vorlesung am Montag entfällt', message: '<p>Liebe Studierende,</p><p>die Vorlesung am Montag entfällt. Bitte nutzt die Aufzeichnung.</p>', created: ts(-5), userfullname: 'Lehrende Beispielperson' }],
+      22: [
+        // new the second time: reported as news
+        ...(extra ? [{ discussion: 503, name: 'Raumänderung für die Übung', message: '<p>Die Übung findet diesmal im HS 7 statt.</p>', created: ts(-1), userfullname: 'Tutorin Muster' }] : []),
+        { discussion: 502, name: 'Anmeldung zu den Übungsgruppen', message: '<p>Bitte meldet euch bis Freitag an.</p>', created: ts(-50), userfullname: 'Tutorin Muster', pinned: true }
+      ]
+    },
+    checkmarks: [
+      {
+        id: 31, instance: 3, course: eb.id, name: 'Kreuzerlübung 2', timedue: ts(48), cutoffdate: ts(48), submission_timemodified: ts(-2),
+        examples: [{ id: 1, name: '1a', checked: 1 }, { id: 2, name: '1b', checked: 1 }, { id: 3, name: '2', checked: 0 }, { id: 4, name: '3', checked: 1 }],
+        feedback: null
+      },
+      {
+        id: 32, instance: 4, course: eb.id, name: 'Kreuzerlübung 1', timedue: ts(-6 * 24), cutoffdate: ts(-6 * 24), submission_timemodified: ts(-7 * 24),
+        examples: [{ id: 5, name: '1', checked: 1 }, { id: 6, name: '2a', checked: 1 }, { id: 7, name: '2b', checked: 0 }],
+        feedback: { grade: '2.00000', feedback: '<p>Beispiel 1 gut präsentiert.</p>' }
+      }
+    ],
+    calendar: [
+      {
+        id: 41, name: `${eb.fullname} / Abgabegespräche: Appointment`, courseid: eb.id, modulename: 'organizer', instance: 5, eventtype: 'Appointment', timestart: ts(50), timeduration: 900,
+        description: `${eb.fullname} / Abgabegespräche: Appointment with Tutorin Muster<br />Location: Seminarraum 2<br />`
+      },
+      { id: 42, name: 'Registration start: Sprechstunde', courseid: bk.id, modulename: 'organizer', instance: 6, eventtype: 'Instance', timestart: ts(-24), timeduration: 0 },
+      { id: 43, name: 'Registration end: Sprechstunde', courseid: bk.id, modulename: 'organizer', instance: 6, eventtype: 'Instance', timestart: ts(72), timeduration: 0 }
+    ],
+    grades: {
+      [eb.id]: [
+        { id: 61, itemname: 'Kreuzerlübung 1', itemtype: 'mod', graderaw: 2, gradeformatted: '2,00', rangeformatted: '0,00–3,00', percentageformatted: '66,67 %', feedback: '<p>Beispiel 1 gut präsentiert.</p>', gradedategraded: ts(-48) },
+        // new the second time
+        ...(extra ? [{ id: 62, itemname: 'Test 1', itemtype: 'mod', graderaw: 8, gradeformatted: '8,00', rangeformatted: '0,00–10,00', percentageformatted: '80,00 %', feedback: '', gradedategraded: ts(-1) }] : []),
+        { id: 60, itemname: null, itemtype: 'course', graderaw: 2, gradeformatted: '2,00' }
+      ],
+      [bk.id]: [
+        { id: 71, itemname: 'Übungsblatt 1', itemtype: 'mod', graderaw: 8.5, gradeformatted: '8,50', rangeformatted: '0,00–10,00', percentageformatted: '85,00 %', feedback: '<p>Sauber gelöst, bei 2b fehlt die Begründung.</p>', gradedategraded: ts(-72) }
+      ]
+    }
+  }
 }
 
 const tiss = tissEvents()
@@ -294,6 +349,14 @@ for (const [sync, expected] of Object.entries(expectedExams)) {
 // ECTS and TUWEL link from the course pages, in the course list.
 const expectedInfo = courses.map(([key, , , , ects, tuwelId]) => `${key} ${Number(ects)} ECTS https://tuwel.tuwien.ac.at/course/view.php?id=${tuwelId}`)
 if (JSON.stringify(report.courseInfo) !== JSON.stringify(expectedInfo)) problems.push(`LVA-Angaben: ${JSON.stringify(report.courseInfo)}`)
+// TUWEL beyond deadlines.
+const expectedTuwel = { announcements: 3, checkmarks: 2, gradedCourses: 2, appointments: 1, bookings: 1, testRoom: 'HS 7 Ausweichsaal - BSP', sheetTicked: '3 von 4' }
+for (const [key, value] of Object.entries(expectedTuwel)) {
+  if (report.tuwel?.[key] !== value) problems.push(`TUWEL ${key}: ${JSON.stringify(report.tuwel?.[key])} statt ${JSON.stringify(value)}`)
+}
+for (const news of ['announcement: Neue Ankündigung: Raumänderung für die Übung', 'grade: Neue Bewertung: Test 1']) {
+  if (!(report.changes ?? []).some((change) => change.startsWith(news))) problems.push(`Nicht gemeldet: ${news}`)
+}
 if (!(report.overlaps >= 2)) problems.push(`Überschneidungen: ${report.overlaps} statt mindestens 2 markierte Termine`)
 const examCount = Object.keys(report.exams?.first ?? {}).length
 if (examCount !== Object.keys(expectedExams.first).length) problems.push(`${examCount} statt ${Object.keys(expectedExams.first).length} Prüfungstermine gelesen`)

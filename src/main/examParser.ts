@@ -32,6 +32,10 @@ export interface ParsedRegistrations {
 
 /** From "Merkmale" and the links of the page. */
 export interface ParsedCourseInfo {
+  /** Title without the LVA number, from the page title. */
+  title: string | null
+  /** LVA type, e.g. "VU". */
+  type: string | null
   ects: number | null
   /** Semesterwochenstunden */
   hours: number | null
@@ -99,7 +103,11 @@ export function parseCourseInfo(html: string): ParsedCourseInfo {
     return match ? Number(match[1]!.replace(',', '.')) : null
   }
   const tuwel = /https:\/\/tuwel\.tuwien\.ac\.at\/course\/view\.php\?id=(\d+)/.exec(html)
+  // "<title>123.456 Titel | TU Wien</title>"
+  const title = /<title>\s*\d{3}\.[0-9A-Z]{3}\s+([^<]+?)\s*(?:\|[^<|]*)?<\/title>/i.exec(html)?.[1]
   return {
+    title: title ? decode(title).trim() : null,
+    type: /Typ:\s*([A-Z]{2})\b/.exec(facts)?.[1] ?? null,
     ects: number('ECTS'),
     hours: number('Semesterwochenstunden'),
     tuwelUrl: tuwel ? `https://tuwel.tuwien.ac.at/course/view.php?id=${tuwel[1]}` : null,

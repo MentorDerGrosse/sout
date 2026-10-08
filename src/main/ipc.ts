@@ -4,6 +4,8 @@ import { autostartFile, isAutostartEnabled, setAutostart } from './autostart'
 import { calendarChanged, calendarData, clearCalendar, syncCalendar, updateCourse } from './calendar'
 import { changes, dismissChange } from './changes'
 import { dismissExam, examsData, syncExams } from './exams'
+import { tuwelExtras } from './tuwelExtras'
+import { addStudyCourse, removeStudyCourse, studiesData, updateStudyCourse } from './studies'
 import { chooseNotesDir, createNote, importPdfs, moveNote, noteForEvent, noteForTask, quickNote, setupNotes } from './courseNotes'
 import { flushNote, notesData, readNote, renameNote, searchNotes, showInFolder, trashNote, writeNote } from './notes'
 import { addOwnEvent, deleteOwnEvent, updateOwnEvent } from './ownEvents'
@@ -133,6 +135,22 @@ export function registerIpc(): void {
   ipcMain.handle(IPC.dismissChange, (_event, id: unknown) => {
     dismissChange(stringOrNull(id))
     return changes()
+  })
+  ipcMain.handle(IPC.getTuwelExtras, () => tuwelExtras())
+  ipcMain.handle(IPC.getStudies, () => studiesData())
+  ipcMain.handle(IPC.updateStudyCourse, (_event, key: unknown, semester: unknown, patch: unknown) => {
+    updateStudyCourse(text(key), text(semester), patch && typeof patch === 'object' ? patch : {})
+    return studiesData()
+  })
+  ipcMain.handle(IPC.addStudyCourse, (_event, key: unknown, semester: unknown) =>
+    attempt(async () => {
+      await addStudyCourse(text(key), text(semester))
+      return studiesData()
+    })
+  )
+  ipcMain.handle(IPC.removeStudyCourse, (_event, key: unknown, semester: unknown) => {
+    removeStudyCourse(text(key), text(semester))
+    return studiesData()
   })
   ipcMain.handle(IPC.getExams, () => examsData())
   ipcMain.handle(IPC.syncExams, async () => {

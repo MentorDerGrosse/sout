@@ -1153,6 +1153,12 @@ body.resizing iframe {
   opacity: 0.75;
 }
 
+/* Appointments booked in TUWEL: a stronger left edge. */
+.fc .kind-appointment {
+  border-left-width: 4px;
+  border-left-color: var(--text) !important;
+}
+
 /* Own appointments: striped, so they stand apart from the TISS ones. */
 .fc .kind-own {
   background-image: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.16) 0 6px, transparent 6px 12px);
@@ -1761,6 +1767,229 @@ select.input {
 
 .nowrap {
   white-space: nowrap;
+}
+
+/* ---------- Announcements (Heute) ---------- */
+
+.announcements {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.announcement + .announcement {
+  border-top: 1px solid var(--border);
+}
+
+.announcement-head {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.announcement-head .rotated {
+  transform: rotate(-90deg);
+}
+
+.announcement-title {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.announcement-title svg {
+  color: var(--accent);
+  vertical-align: -1px;
+}
+
+.announcement-meta {
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.announcement-body {
+  padding: 0 0 12px 24px;
+}
+
+.announcement-author {
+  margin: 0 0 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.announcement-text {
+  max-height: 280px;
+  margin: 0 0 10px;
+  overflow-y: auto;
+  font-size: 13px;
+  white-space: pre-line;
+  user-select: text;
+}
+
+/* ---------- Kreuzerlübungen (Abgaben) ---------- */
+
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.example {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.task-room {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.example.checked {
+  border-color: transparent;
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-weight: 600;
+}
+
+/* ---------- Noten ---------- */
+
+.grade-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.grade-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.grade-tile-label {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.grade-tile-value {
+  font-size: 28px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.grade-tile-hint {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.study-row {
+  gap: 12px;
+}
+
+.study-row .row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.study-ects {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.study-ects .input {
+  width: 70px;
+  text-align: right;
+}
+
+.study-grade {
+  flex: none;
+  width: 210px;
+}
+
+.study-grade.grade-5 {
+  color: var(--danger);
+}
+
+.add-course {
+  margin-top: 4px;
+}
+
+.grades-note {
+  margin-bottom: 26px;
+}
+
+.grade-items {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.grade-item + .grade-item {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.grade-item-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.grade-item-name {
+  font-weight: 600;
+}
+
+.grade-item-grade {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.grade-item-range,
+.grade-item-date {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.grade-feedback {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  background: var(--surface-muted);
+  font-size: 13px;
+  white-space: pre-line;
+  user-select: text;
 }
 
 /* ---------- Settings: appearance ---------- */

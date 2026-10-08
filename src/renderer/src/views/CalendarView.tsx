@@ -40,6 +40,7 @@ const KIND_FILTERS: { kind: Filter; label: string }[] = [
   { kind: 'exam', label: 'Prüfungen' },
   { kind: 'registration', label: 'Anmeldungen' },
   { kind: 'own', label: 'Eigene' },
+  { kind: 'appointment', label: 'TUWEL-Termine' },
   { kind: 'deadline', label: 'Abgaben' },
   { kind: 'holiday', label: 'Ferien' }
 ]
@@ -480,6 +481,12 @@ function EventDetails(props: {
             <dd>{event.detail}</dd>
           </>
         )}
+        {event.with && (
+          <>
+            <dt>Mit</dt>
+            <dd>{event.with}</dd>
+          </>
+        )}
         {props.clashes.length > 0 && (
           <>
             <dt className="clash-label">
@@ -500,10 +507,16 @@ function EventDetails(props: {
           <a className="button secondary small" href={tissCourseUrl(course.key, start)} target="_blank" rel="noreferrer">
             <ExternalLink size={13} /> LVA in TISS
           </a>
-          {course.tuwelUrl && (
-            <a className="button secondary small" href={course.tuwelUrl} target="_blank" rel="noreferrer">
-              <ExternalLink size={13} /> Kurs in TUWEL
+          {event.url ? (
+            <a className="button secondary small" href={event.url} target="_blank" rel="noreferrer">
+              <ExternalLink size={13} /> In TUWEL öffnen
             </a>
+          ) : (
+            course.tuwelUrl && (
+              <a className="button secondary small" href={course.tuwelUrl} target="_blank" rel="noreferrer">
+                <ExternalLink size={13} /> Kurs in TUWEL
+              </a>
+            )
           )}
         </div>
       )}

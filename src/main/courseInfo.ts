@@ -8,6 +8,8 @@ import { readJson, writeJson } from './jsonFile'
 
 export interface CourseInfo {
   semester: string
+  title: string | null
+  type: string | null
   ects: number | null
   hours: number | null
   tuwelUrl: string | null

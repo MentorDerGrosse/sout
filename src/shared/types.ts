@@ -2,9 +2,9 @@
 
 import type { ThemeMode } from './themes'
 
-export type View = 'today' | 'calendar' | 'deadlines' | 'exams' | 'notes' | 'settings'
+export type View = 'today' | 'calendar' | 'deadlines' | 'exams' | 'grades' | 'notes' | 'settings'
 
-const VIEWS: readonly string[] = ['today', 'calendar', 'deadlines', 'exams', 'notes', 'settings']
+const VIEWS: readonly string[] = ['today', 'calendar', 'deadlines', 'exams', 'grades', 'notes', 'settings']
 
 export function isView(value: unknown): value is View {
   return typeof value === 'string' && VIEWS.includes(value)
@@ -30,6 +30,8 @@ export interface Settings {
   notifyNewTasks: boolean
   /** Look for new grades in TUWEL and notify. */
   notifyGrades: boolean
+  /** Notify about new announcements in the TUWEL courses. */
+  notifyAnnouncements: boolean
   /** Exam registrations in TISS: notify when they open, remind before they close, report new exam dates. */
   notifyExamRegistration: boolean
   /** Light, dark, or as the system says. */
@@ -77,7 +79,7 @@ export interface AppInfo {
   launcher: string | null
 }
 
-export type EventKind = 'course' | 'group' | 'exam' | 'holiday' | 'other' | 'own'
+export type EventKind = 'course' | 'group' | 'exam' | 'holiday' | 'other' | 'own' | 'appointment'
 
 /** One appointment from the TISS calendar. */
 export interface CalendarEvent {
@@ -98,6 +100,9 @@ export interface CalendarEvent {
   otherLocations: string[]
   /** Own appointments: id of the OwnEvent this (occurrence) comes from; null for TISS. */
   ownId: string | null
+  /** Appointments booked in TUWEL: with whom, and the TUWEL page. */
+  with?: string | null
+  url?: string | null
 }
 
 /** An own appointment as entered: study group, study block … */
@@ -264,6 +269,90 @@ export interface Task {
   url: string | null
   /** Moodle's label for the next step, e.g. "Abgabe hinzufügen". */
   actionLabel: string | null
+  /** Tests in a lecture hall: the room, from an exam or appointment in the TISS calendar at that time. */
+  room?: string | null
+}
+
+/** A post in a course's announcement forum ("Ankündigungen") in TUWEL. */
+export interface Announcement {
+  id: string
+  courseKey: string | null
+  course: string
+  title: string
+  /** Plain text. */
+  text: string
+  author: string
+  at: string
+  pinned: boolean
+  url: string
+}
+
+/** A Kreuzerlübung in TUWEL: the examples to tick, and which ones you ticked. */
+export interface CheckmarkSheet {
+  id: number
+  courseKey: string | null
+  course: string
+  name: string
+  due: string | null
+  cutoff: string | null
+  examples: { name: string; checked: boolean }[]
+  /** Something was submitted (before that nothing counts as ticked). */
+  submitted: boolean
+  grade: string | null
+  feedback: string | null
+  url: string
+}
+
+/** One graded item of a course in TUWEL. */
+export interface GradeEntry {
+  id: number
+  name: string
+  /** As TUWEL shows it, e.g. "8,50". */
+  grade: string
+  range: string | null
+  percentage: string | null
+  /** Plain text. */
+  feedback: string | null
+  gradedAt: string | null
+}
+
+/** A course's grades in TUWEL. */
+export interface CourseGrades {
+  courseKey: string | null
+  course: string
+  url: string
+  /** Course total as TUWEL shows it; null if TUWEL doesn't show one. */
+  total: string | null
+  items: GradeEntry[]
+}
+
+/** A course's final grade as you enter it: 1–5, or "mit Erfolg teilgenommen". */
+export type CourseGrade = '1' | '2' | '3' | '4' | '5' | 'passed'
+
+/** A course in the ECTS and grade overview. */
+export interface StudyCourse {
+  key: string
+  semester: string
+  type: string | null
+  title: string
+  ects: number | null
+  grade: CourseGrade | null
+  /** Added by hand (not from the TISS calendar). */
+  manual: boolean
+}
+
+export interface StudiesData {
+  /** Newest semester first. */
+  courses: StudyCourse[]
+}
+
+/** More from TUWEL than deadlines: announcements, Kreuzerlübungen, grades. */
+export interface TuwelExtras {
+  announcements: Announcement[]
+  checkmarks: CheckmarkSheet[]
+  grades: CourseGrades[]
+  gradesCheckedAt: string | null
+  syncedAt: string | null
 }
 
 export interface TasksData {
@@ -293,7 +382,7 @@ export interface Change {
   id: string
   /** When sout noticed it (ISO). */
   at: string
-  kind: 'room' | 'time' | 'cancelled' | 'added' | 'exam' | 'task' | 'grade'
+  kind: 'room' | 'time' | 'cancelled' | 'added' | 'exam' | 'task' | 'grade' | 'announcement' | 'material'
   title: string
   detail: string
   /** Where a click leads: a view of sout, or a TUWEL page. */
@@ -385,6 +474,14 @@ export interface SoutApi {
   /** One change, or with null all. */
   dismissChange(id: string | null): Promise<Change[]>
   onChangesChanged(listener: () => void): () => void
+  getStudies(): Promise<StudiesData>
+  updateStudyCourse(key: string, semester: string, patch: { grade?: CourseGrade | null; ects?: number | null }): Promise<StudiesData>
+  /** Looks the course up in TISS (title, ECTS). */
+  addStudyCourse(key: string, semester: string): Promise<Result<StudiesData>>
+  removeStudyCourse(key: string, semester: string): Promise<StudiesData>
+  onStudiesChanged(listener: () => void): () => void
+  getTuwelExtras(): Promise<TuwelExtras>
+  onTuwelExtrasChanged(listener: () => void): () => void
   getExams(): Promise<ExamsData>
   /** Reads the TISS calendar and the course pages again now. */
   syncExams(): Promise<ExamsData>
@@ -456,6 +553,13 @@ export const IPC = {
   getChanges: 'sout:get-changes',
   dismissChange: 'sout:dismiss-change',
   changesChanged: 'sout:changes-changed',
+  getStudies: 'sout:get-studies',
+  updateStudyCourse: 'sout:update-study-course',
+  addStudyCourse: 'sout:add-study-course',
+  removeStudyCourse: 'sout:remove-study-course',
+  studiesChanged: 'sout:studies-changed',
+  getTuwelExtras: 'sout:get-tuwel-extras',
+  tuwelExtrasChanged: 'sout:tuwel-extras-changed',
   getExams: 'sout:get-exams',
   syncExams: 'sout:sync-exams',
   dismissExam: 'sout:dismiss-exam',

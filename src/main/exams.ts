@@ -1,15 +1,16 @@
-import { app, net, powerMonitor, session } from 'electron'
-import { readFileSync } from 'node:fs'
+import { app, net, powerMonitor } from 'electron'
 import { join } from 'node:path'
-import { currentSemester, tissCourseUrl } from '../shared/tu'
+import { currentSemester } from '../shared/tu'
 import type { CalendarEvent, Course, CourseDeadline, ExamDate, ExamsData } from '../shared/types'
 import { calendarChanged, calendarData } from './calendar'
 import { saveCourseInfo, type CourseInfo } from './courseInfo'
 import { reportChanges, type NewChange } from './changes'
-import { isCoursePage, parseCourseInfo, parseExamTable, parseRegistrations, type ParsedExam, type ParsedRegistrations } from './examParser'
+import { parseCourseInfo, parseExamTable, parseRegistrations, type ParsedExam, type ParsedRegistrations } from './examParser'
 import { readJson, writeJson } from './jsonFile'
 import { roomInfo } from './rooms'
 import { getSettings } from './settings'
+import { rememberCourses } from './studies'
+import { devPagesDir, readCoursePage } from './tissPages'
 
 // Exam dates and their registration windows only reach the TISS calendar once you are registered.
 // The public course pages list them, though: sout reads the pages of the courses in your TISS
@@ -264,8 +265,14 @@ export function syncExams(force = false): Promise<void> {
     const upcoming = (exam: StoredExam): boolean => Date.parse(exam.end) > Date.now()
     // Read again: "Brauche ich nicht" may have been clicked in the meantime.
     saveCourseInfo(infos)
-    // ECTS and TUWEL links are part of the course list.
+    // ECTS and TUWEL links are part of the course list; the grade overview remembers every course.
     calendarChanged()
+    rememberCourses(
+      Object.entries(infos).map(([key, info]) => {
+        const course = courses.find((candidate) => candidate.key === key)
+        return { key, semester: info.semester, type: course?.type ?? info.type, title: course?.title ?? info.title ?? key, ects: info.ects }
+      })
+    )
     saveCache({ ...loadCache(), exams: [...exams.values()].filter(upcoming), registrations, pages: states, syncedAt: now })
     reportChanges(added.filter(upcoming).map(examChange), getSettings().notifyExamRegistration)
   })().finally(() => {
@@ -282,42 +289,6 @@ function isDue(pages: CoursePage[]): boolean {
   if (!syncedAt || pages.some((page) => !states[pageId(page)])) return true
   const age = Date.now() - Date.parse(syncedAt)
   return age > SYNC_INTERVAL_MS || (age > RETRY_MS && pages.some((page) => states[pageId(page)]?.error))
-}
-
-/** Development: course pages from files, <SOUT_TISS_PAGES>/<LVA number without dot>.html. */
-const devPagesDir = (): string | undefined => (app.isPackaged ? undefined : process.env['SOUT_TISS_PAGES'])
-
-/** The public TISS page of a course (German). */
-export async function readCoursePage(courseKey: string, semester: string): Promise<string> {
-  const devDir = devPagesDir()
-  const html = devDir ? readFileSync(join(devDir, `${courseKey.replace('.', '')}.html`), 'utf8') : await fetchCoursePage(courseKey, semester)
-  if (!isCoursePage(html, courseKey)) throw new Error('TISS hat statt der LVA-Seite etwas anderes geliefert.')
-  return html
-}
-
-async function fetchCoursePage(courseKey: string, semester: string): Promise<string> {
-  // TISS hands out the page only to a "browser window" it knows: a window id in the address and
-  // in a cookie, as its script would set them. An own session keeps these cookies out of the rest.
-  const pages = session.fromPartition('tiss-pages')
-  const requestId = String(100 + Math.floor(Math.random() * 900))
-  const windowId = String(1000 + Math.floor(Math.random() * 9000))
-  const cookie = `dsrwid-${requestId}`
-  await pages.cookies.set({ url: 'https://tiss.tuwien.ac.at', name: cookie, value: windowId, path: '/' })
-  try {
-    let response: Response
-    try {
-      response = await pages.fetch(`${tissCourseUrl(courseKey, semester)}&locale=de&dsrid=${requestId}&dswid=${windowId}`, {
-        credentials: 'include',
-        signal: AbortSignal.timeout(20_000)
-      })
-    } catch {
-      throw new Error('TISS ist nicht erreichbar – bist du online?')
-    }
-    if (!response.ok) throw new Error(`TISS antwortet mit HTTP ${response.status}.`)
-    return await response.text()
-  } finally {
-    await pages.cookies.remove('https://tiss.tuwien.ac.at', cookie).catch(() => {})
-  }
 }
 
 /** Some course pages don't link the TUWEL course; TISS's public course API has it ("eLearning"). */
