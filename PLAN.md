@@ -170,8 +170,8 @@ Gestartet würde sout dort schon, und Kalender, Abgaben und Einstellungen funkti
 - [x] Texte je System (Taskleiste/Menüleiste/Leiste, Schlüsselbund, Strg/Cmd); GNOME-Hinweise und `install-desktop` nur unter Linux
 - [x] Installer: Windows (NSIS), macOS (.dmg/.zip für Apple Silicon und Intel), nicht signiert; Anleitung in der README
 - [x] GitHub-Ablauf „Bauen & testen“ (von Hand starten): baut auf echten Linux-, Windows- und Mac-Rechnern, lässt dort den Testlauf laufen, Installer und Screenshots zum Herunterladen
-- [ ] Ablauf „Bauen & testen“ einmal auf GitHub laufen lassen und die Windows-/Mac-Screenshots ansehen
-- [ ] Auf echten Windows- und Mac-Rechnern ausprobieren (Tray, Autostart, Benachrichtigungen)
+- [x] Ablauf „Bauen & testen“ einmal auf GitHub laufen lassen und die Windows-/Mac-Screenshots ansehen
+- [x] Auf echten Windows- und Mac-Rechnern ausprobieren (Tray, Autostart, Benachrichtigungen) – klappt (9.10.2026)
 
 ### Nach Phase 5 – weitere Funktionen
 
