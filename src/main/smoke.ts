@@ -1,4 +1,5 @@
 import { app, BrowserWindow, Menu, nativeTheme, net, screen } from 'electron'
+import { execFile } from 'node:child_process'
 import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { IPC, type View } from '../shared/types'
@@ -21,7 +22,7 @@ import { getSecret, secretsStatus } from './secrets'
 import { trayHostAvailable, windowSystem } from './system'
 import { fetchTissFeed } from './tiss'
 import { createTray, trayUrgent } from './tray'
-import { broadcast, createMainWindow, createMiniWindow } from './windows'
+import { broadcast, createMainWindow, createMiniWindow, isMiniVisible } from './windows'
 
 // `--smoke-test=<dir>`: starts everything without showing a window, takes screenshots of the views,
 // writes report.json and quits. Uses its own data folder and no keyring, so it also works on an
@@ -40,7 +41,8 @@ export async function runSmokeTest(dir: string): Promise<void> {
   app.setPath('userData', join(dir, 'userData'))
   app.commandLine.appendSwitch('password-store', 'basic')
 
-  const report: Record<string, unknown> = { windowSystem: windowSystem() }
+  // XCURSOR_SIZE comes from fixCursorSize() at startup (Linux/XWayland).
+  const report: Record<string, unknown> = { windowSystem: windowSystem(), xcursorSize: process.env['XCURSOR_SIZE'] ?? null }
   const messages: string[] = []
   const finish = (code: number): void => {
     report['messages'] = messages
@@ -134,6 +136,7 @@ export async function runSmokeTest(dir: string): Promise<void> {
     Object.assign(screenshots, await smokeLayout(main, dir))
     Object.assign(screenshots, await smokeOwnEvents(main, dir, report))
     Object.assign(screenshots, await smokeChanges(main, mini, dir, report))
+    await smokeTrayMenu(report)
     Object.assign(screenshots, await smokeNotes(main, mini, dir, report))
     report['screenshots'] = screenshots
 
@@ -162,6 +165,38 @@ function addSampleOwnEvents(): void {
   addOwnEvent({ title: 'Lerngruppe', start: at(1, 16).toISOString(), end: at(1, 18).toISOString(), allDay: false, location: 'Bibliothek', courseKey: '234.567', repeatWeeklyUntil: day })
   addOwnEvent({ title: 'Lernblock', start: at(0, 19).toISOString(), end: at(0, 21).toISOString(), allDay: false, location: null, courseKey: null, repeatWeeklyUntil: null })
   calendarChanged()
+}
+
+/**
+ * Linux: what GNOME's AppIndicator extension does on a click – tell sout's tray menu it opened.
+ * The mini view has to come along, ticked in the menu; a click on that tick closes it again.
+ */
+async function smokeTrayMenu(report: Record<string, unknown>): Promise<void> {
+  if (process.platform !== 'linux') return
+  const run = (args: string[]): Promise<string> =>
+    new Promise((resolve) => execFile(args[0]!, args.slice(1), { timeout: 5000 }, (error, stdout) => resolve(error ? '' : stdout)))
+  let owner = ''
+  for (let attempt = 0; attempt < 15 && !owner; attempt++) {
+    const name = `org.freedesktop.StatusNotifierItem-${process.pid}-1`
+    const answer = await run(['gdbus', 'call', '--session', '--dest', 'org.freedesktop.DBus', '--object-path', '/org/freedesktop/DBus', '--method', 'org.freedesktop.DBus.GetNameOwner', name])
+    owner = /'(:[\d.]+)'/.exec(answer)?.[1] ?? ''
+    if (!owner) await delay(200)
+  }
+  if (!owner) {
+    report['trayMenu'] = 'kein Tray-Eintrag auf dem Sitzungsbus'
+    return
+  }
+  const menu = (method: string, ...args: string[]): Promise<string> =>
+    // "--": arguments like -1 are not options of gdbus.
+    run(['gdbus', 'call', '--session', '--dest', owner, '--object-path', '/com/canonical/dbusmenu', '--method', `com.canonical.dbusmenu.${method}`, '--', ...args])
+  await menu('Event', '0', 'opened', '<int32 0>', '0')
+  await delay(1200)
+  const shownWithMenu = isMiniVisible()
+  const item = /\((\d+), \{[^}]*'label': <'Mini-Ansicht'>[^}]*\}/.exec(await menu('GetLayout', '0', '-1', '@as []'))
+  const tickedInMenu = Boolean(item && /'toggle-state': <1>/.test(item[0]))
+  if (item) await menu('Event', item[1]!, 'clicked', '<int32 0>', '0')
+  await delay(800)
+  report['trayMenu'] = { shownWithMenu, tickedInMenu, closedFromMenu: !isMiniVisible() }
 }
 
 /** Drags a resize handle like a mouse would. */

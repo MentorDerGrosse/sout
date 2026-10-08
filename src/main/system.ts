@@ -4,19 +4,33 @@ import type { AppInfo } from '../shared/types'
 
 export const X11_FLAG = '--ozone-platform=x11'
 
+/** How long to wait at most for GNOME's X11 settings right after login. */
+const XRDB_WAIT_SECONDS = 4
+
 /**
  * Under XWayland with fractional scaling, X11 apps draw at 2x and GNOME scales them down. Chromium
  * then loads the mouse cursor at the unscaled size, so it shrinks over our windows. GNOME publishes
  * the right X11 size as the Xcursor.size resource; hand it to Chromium via XCURSOR_SIZE.
+ *
+ * Right after login (autostart) XWayland only starts with the first X11 program – us – and GNOME's
+ * XSettings service sets the resources a moment later. So if the size isn't there yet, wait for it
+ * a few seconds instead of asking once too early.
  */
 export function fixCursorSize(): void {
   if (process.env['XCURSOR_SIZE'] || !process.argv.includes(X11_FLAG)) return
+  const script = [
+    'command -v xrdb >/dev/null || exit 1',
+    `i=0; while [ $i -lt ${XRDB_WAIT_SECONDS * 4} ]; do`,
+    '  size=$(xrdb -query 2>/dev/null | sed -n "s/^Xcursor\\.size:[[:space:]]*\\([0-9][0-9]*\\).*/\\1/p")',
+    '  [ -n "$size" ] && { echo "$size"; exit 0; }',
+    '  sleep 0.25; i=$((i + 1))',
+    'done; exit 1'
+  ].join('\n')
   try {
-    const resources = execFileSync('xrdb', ['-query'], { encoding: 'utf8', timeout: 2000 })
-    const size = /^Xcursor\.size:\s*(\d+)/m.exec(resources)?.[1]
-    if (size) process.env['XCURSOR_SIZE'] = size
+    const size = execFileSync('sh', ['-c', script], { encoding: 'utf8', timeout: (XRDB_WAIT_SECONDS + 2) * 1000 }).trim()
+    if (/^\d+$/.test(size)) process.env['XCURSOR_SIZE'] = size
   } catch {
-    // No xrdb: keep Chromium's default size.
+    // No xrdb, or GNOME didn't publish a size in time: keep Chromium's default size.
   }
 }
 
