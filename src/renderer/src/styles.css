@@ -1870,6 +1870,32 @@ select.input {
   border-left-width: 3px;
 }
 
+/* Appointments at the same time: a warning sign and a dashed outline in the warning colour. */
+.fc .overlap {
+  outline: 2px dashed var(--warn);
+  outline-offset: -2px;
+}
+
+.cal-clash {
+  display: inline-flex;
+  margin-right: 3px;
+  color: var(--warn);
+  vertical-align: -1px;
+}
+
+.fc .overlap .cal-clash {
+  color: inherit;
+}
+
+.clash-label,
+.clash-list {
+  color: var(--warn);
+}
+
+.room-stream {
+  margin-top: 4px;
+}
+
 /* ---------- Notes ---------- */
 
 .content-notes {

@@ -47,6 +47,31 @@ export function visibleEvents(data: CalendarData): CalendarEvent[] {
   return data.events.filter((event) => !event.courseKey || !courses.get(event.courseKey)?.hidden)
 }
 
+/**
+ * Appointments that overlap another one – TISS and own ones, timed, holidays and hidden courses left
+ * out. By id, with the appointments they clash with.
+ */
+export function overlapping(data: CalendarData): Map<string, CalendarEvent[]> {
+  const timed = visibleEvents(data)
+    .filter((event) => !event.allDay && event.kind !== 'holiday')
+    .map((event) => ({ event, start: Date.parse(event.start), end: Date.parse(event.end) }))
+    .filter((item) => item.end > item.start)
+    .sort((a, b) => a.start - b.start)
+  const result = new Map<string, CalendarEvent[]>()
+  const add = (id: string, other: CalendarEvent): void => {
+    result.set(id, [...(result.get(id) ?? []), other])
+  }
+  for (const [index, item] of timed.entries()) {
+    // Sorted by start: everything starting before this one ends overlaps it.
+    for (const other of timed.slice(index + 1)) {
+      if (other.start >= item.end) break
+      add(item.event.id, other.event)
+      add(other.event.id, item.event)
+    }
+  }
+  return result
+}
+
 /** Timed course appointments that haven't ended yet, soonest first. */
 export function upcoming(data: CalendarData, now: Date, limit: number): CalendarEvent[] {
   const iso = now.toISOString()

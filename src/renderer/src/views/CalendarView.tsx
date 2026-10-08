@@ -6,7 +6,7 @@ import listPlugin from '@fullcalendar/list'
 import interactionPlugin from '@fullcalendar/interaction'
 import deLocale from '@fullcalendar/core/locales/de'
 import type { EventChangeArg, EventContentArg, EventInput } from '@fullcalendar/core'
-import { ExternalLink, MapPin, NotebookPen, Pencil, Plus, RefreshCw, Repeat, Trash2, X } from 'lucide-react'
+import { ExternalLink, MapPin, NotebookPen, Pencil, Plus, RefreshCw, Repeat, Trash2, TriangleAlert, Video, X } from 'lucide-react'
 import { EVENT_NOTE_FOLDERS } from '../../../shared/notes'
 import type { CalendarData, CalendarEvent, EventKind, ExamDate, OwnEvent, View } from '../../../shared/types'
 import { ExamInfo } from '../ExamInfo'
@@ -24,6 +24,7 @@ import {
   isoDate,
   KIND_LABELS,
   mapsUrl,
+  overlapping,
   roomName,
   syncStatus,
   tissCourseUrl,
@@ -57,6 +58,7 @@ export default function CalendarView(props: { onNavigate: (view: View) => void; 
   if (!data) return null
 
   const courses = courseMap(data)
+  const clashes = overlapping(data)
   const ownById = new Map(data.own.map((own) => [own.id, own]))
   const fromTiss = data.events.some((event) => event.ownId === null)
   const events: EventInput[] = visibleEvents(data)
@@ -75,8 +77,8 @@ export default function CalendarView(props: { onNavigate: (view: View) => void; 
         backgroundColor: color,
         borderColor: color,
         textColor: '#fff',
-        classNames: [`kind-${event.kind}`],
-        extendedProps: { room: event.location ? roomName(event.location) : '' }
+        classNames: [`kind-${event.kind}`, ...(clashes.has(event.id) ? ['overlap'] : [])],
+        extendedProps: { room: event.location ? roomName(event.location) : '', overlap: clashes.has(event.id) }
       }
     })
 
@@ -324,7 +326,16 @@ export default function CalendarView(props: { onNavigate: (view: View) => void; 
           }}
         />
       ) : (
-        selected && <EventDetails data={data} event={selected} onClose={() => setSelected(null)} onNavigate={onNavigate} onOpenNote={props.onOpenNote} />
+        selected && (
+          <EventDetails
+            data={data}
+            event={selected}
+            clashes={clashes.get(selected.id) ?? []}
+            onClose={() => setSelected(null)}
+            onNavigate={onNavigate}
+            onOpenNote={props.onOpenNote}
+          />
+        )
       )}
       {shownExam && <ExamDetails data={data} exam={shownExam} now={now} onClose={() => setSelectedExam(null)} />}
       {dialog && (
@@ -336,11 +347,17 @@ export default function CalendarView(props: { onNavigate: (view: View) => void; 
 
 function renderEvent(arg: EventContentArg) {
   // Month cells are small: one line with dot, time and name.
+  const clash = arg.event.extendedProps['overlap'] === true && (
+    <span className="cal-clash" title="Überschneidet sich mit einem anderen Termin">
+      <TriangleAlert size={11} />
+    </span>
+  )
   if (arg.view.type === 'dayGridMonth' && !arg.event.allDay) {
     return (
       <div className="cal-event-line">
         <span className="cal-dot" style={{ background: arg.event.borderColor }} />
         <span className="cal-event-time">{arg.timeText}</span>
+        {clash}
         <span className="cal-event-title">{arg.event.title}</span>
       </div>
     )
@@ -350,7 +367,10 @@ function renderEvent(arg: EventContentArg) {
   const sub = [arg.event.allDay || arg.view.type === 'listMonth' ? '' : arg.timeText, room].filter(Boolean).join(' · ')
   return (
     <div className="cal-event">
-      <div className="cal-event-title">{arg.event.title}</div>
+      <div className="cal-event-title">
+        {clash}
+        {arg.event.title}
+      </div>
       {sub && <div className="cal-event-sub">{sub}</div>}
     </div>
   )
@@ -399,6 +419,8 @@ function ExamDetails(props: { data: CalendarData; exam: ExamDate; now: Date; onC
 function EventDetails(props: {
   data: CalendarData
   event: CalendarEvent
+  /** Appointments at the same time. */
+  clashes: CalendarEvent[]
   onClose: () => void
   onNavigate: (view: View) => void
   onOpenNote: (path: string, fresh?: boolean) => void
@@ -433,6 +455,13 @@ function EventDetails(props: {
                 <MapPin size={13} /> {roomName(event.location)}
               </a>
               {data.rooms[event.location] && <div className="room-address">{data.rooms[event.location]!.address}</div>}
+              {data.rooms[event.location]?.lectureTube && (
+                <div className="room-stream">
+                  <a href={data.rooms[event.location]!.lectureTube!} target="_blank" rel="noreferrer">
+                    <Video size={13} /> LectureTube (Livestream des Hörsaals)
+                  </a>
+                </div>
+              )}
               {event.otherLocations.map((room) => (
                 <div key={room} className="other-room">
                   auch in{' '}
@@ -449,6 +478,19 @@ function EventDetails(props: {
           <>
             <dt>Was</dt>
             <dd>{event.detail}</dd>
+          </>
+        )}
+        {props.clashes.length > 0 && (
+          <>
+            <dt className="clash-label">
+              <TriangleAlert size={13} />
+            </dt>
+            <dd className="clash-list">
+              Gleichzeitig:{' '}
+              {props.clashes
+                .map((other) => `${eventLabel(other, other.courseKey ? courseMap(data).get(other.courseKey) : undefined)} (${formatTime(other.start)}–${formatTime(other.end)})`)
+                .join(', ')}
+            </dd>
           </>
         )}
       </dl>

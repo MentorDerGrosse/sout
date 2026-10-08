@@ -136,6 +136,8 @@ export type CoursePatch = Partial<Pick<Course, 'shortName' | 'color' | 'hidden'>
 export interface RoomInfo {
   address: string
   mapCode: string
+  /** Live stream of the room (LectureTube), if it has one. */
+  lectureTube: string | null
 }
 
 export interface CalendarData {

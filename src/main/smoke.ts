@@ -326,6 +326,11 @@ async function smokeOwnEvents(main: BrowserWindow, dir: string, report: Record<s
   await delay(600)
   await js(`document.querySelector('.fc-timeGridWeek-button')?.click()`)
   await delay(400)
+  // Two appointments at the same time today (test data): both marked.
+  report['overlaps'] = await js(`document.querySelectorAll('.fc-timegrid-event.overlap').length`)
+  await js(`document.querySelector('.fc-timegrid-event.overlap')?.scrollIntoView({ block: 'center' })`)
+  await delay(800)
+  shots['calendar-overlap'] = await screenshot(main, dir, 'calendar-overlap')
   await js(`document.querySelector('.fc-timegrid-event.kind-own')?.click()`)
   await delay(1500)
   shots['calendar-own'] = await screenshot(main, dir, 'calendar-own')

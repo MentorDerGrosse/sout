@@ -48,6 +48,9 @@ function tissEvents() {
   events.push({ uid: '123.456-now', category: 'COURSE', summary: '123.456 VO Beispielkunde', start: new Date(now.getTime() - 30 * 60_000), minutes: 120, room: courses[0][3], description: 'Vorlesung' })
   events.push({ uid: '234.567-group', category: 'GROUP', summary: '234.567 VU Einführung in die Beispielmathematik - Übungsgruppe 2', start: day(1, 13), minutes: 90, room: courses[1][3] })
   events.push({ uid: '234.567-exam', category: 'EXAM_SLOT', summary: '234.567 VU Einführung in die Beispielmathematik - Test 1', start: day(21, 10), minutes: 90, room: courses[0][3] })
+  // Two appointments at the same time today: marked as overlapping.
+  events.push({ uid: '123.456-extra', category: 'COURSE', summary: '123.456 VO Beispielkunde', start: day(0, 17), minutes: 90, room: courses[0][3], description: 'Vorlesung - Zusatztermin' })
+  events.push({ uid: '345.678-extra', category: 'COURSE', summary: '345.678 UE Grundlagen der Musterrechnung', start: day(0, 17, 30), minutes: 60, room: courses[2][3], description: 'Übung - Zusatztermin' })
   // Taken last week.
   events.push({ uid: '345.678-exam', category: 'EXAM_SLOT', summary: '345.678 UE Grundlagen der Musterrechnung - Kolloquium', start: day(-7, 10), minutes: 60, room: courses[2][3] })
   return events
@@ -285,6 +288,7 @@ for (const [sync, expected] of Object.entries(expectedExams)) {
     if (found !== status) problems.push(`Prüfung ${exam} (${sync === 'first' ? 'erste' : 'zweite'} Abfrage): ${found ?? 'fehlt'} statt ${status}`)
   }
 }
+if (!(report.overlaps >= 2)) problems.push(`Überschneidungen: ${report.overlaps} statt mindestens 2 markierte Termine`)
 const examCount = Object.keys(report.exams?.first ?? {}).length
 if (examCount !== Object.keys(expectedExams.first).length) problems.push(`${examCount} statt ${Object.keys(expectedExams.first).length} Prüfungstermine gelesen`)
 if (!(report.changes ?? []).some((change) => change.startsWith('exam: Neue Prüfung in TISS'))) problems.push('Neuer Prüfungstermin in TISS nicht gemeldet')
