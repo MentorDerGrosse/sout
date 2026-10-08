@@ -4,7 +4,7 @@ import type { CalendarData, Change, View } from '../../../shared/types'
 import { ago, useChanges } from '../lib/changes'
 import { EventList } from '../EventList'
 import { ExamList } from '../ExamList'
-import { examsToAct, useExams } from '../lib/exams'
+import { examsToAct, groupWindowsToAct, useExams } from '../lib/exams'
 import { TaskList } from '../TaskList'
 import { nextUp, useTasks } from '../lib/tasks'
 import { holidayOn, upcoming, useCalendar } from '../lib/calendar'
@@ -205,19 +205,23 @@ function News({ now, onNavigate }: { now: Date; onNavigate: (view: View) => void
   )
 }
 
-/** Exam registrations open now or opening within a week – only when there are some. */
+/** Exam and group registrations open now or opening within a week – only when there are some. */
 function ExamRegistrations({ calendar, now, onNavigate }: { calendar: CalendarData | null; now: Date; onNavigate: (view: View) => void }) {
   const data = useExams()
   const exams = data ? examsToAct(data.exams, now, 7) : []
-  if (exams.length === 0) return null
+  const groups = data ? groupWindowsToAct(data.deadlines, now, 7) : []
+  const total = exams.length + groups.length
+  if (total === 0) return null
+  const shownExams = exams.slice(0, 4)
+  const shownGroups = groups.slice(0, 4 - shownExams.length)
   return (
     <section className="card span-2">
       <h2 className="card-title">
-        <GraduationCap size={16} /> Prüfungsanmeldungen
+        <GraduationCap size={16} /> {groups.length > 0 ? 'Anmeldungen' : 'Prüfungsanmeldungen'}
       </h2>
-      <ExamList exams={exams.slice(0, 4)} calendar={calendar} now={now} />
+      <ExamList exams={shownExams} deadlines={shownGroups} calendar={calendar} now={now} />
       <button type="button" className="link" onClick={() => onNavigate('exams')}>
-        {exams.length > 4 ? `Alle Prüfungen (${exams.length} Anmeldungen offen oder bald)` : 'Alle Prüfungen'}
+        {total > 4 ? `Alle Prüfungen (${total} Anmeldungen offen oder bald)` : 'Alle Prüfungen'}
       </button>
     </section>
   )

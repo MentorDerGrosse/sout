@@ -194,9 +194,28 @@ export interface ExamDate {
   dismissed: boolean
 }
 
+/**
+ * Another deadline from the course page: a group registration window (only for courses you are in
+ * no group of yet), or the last day to deregister from a course.
+ */
+export interface CourseDeadline {
+  id: string
+  courseKey: string
+  semester: string
+  kind: 'group' | 'deregister'
+  /** Group registration: the groups this window is for. */
+  groups: string[]
+  opens: string | null
+  closes: string | null
+  /** Marked as not needed in sout. */
+  dismissed: boolean
+}
+
 export interface ExamsData {
   /** Upcoming exam dates of the courses in the TISS calendar (hidden courses left out), by date. */
   exams: ExamDate[]
+  /** Group registrations and deregistration deadlines still ahead, soonest first. */
+  deadlines: CourseDeadline[]
   /** Course pages that couldn't be read the last time. */
   failed: { courseKey: string; error: string }[]
   /** How many course pages sout looks at. */

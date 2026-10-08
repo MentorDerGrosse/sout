@@ -24,6 +24,12 @@ export interface ParsedExam {
   registration: string | null
 }
 
+/** LVA registration (with the last day to deregister) and the group registration windows. */
+export interface ParsedRegistrations {
+  course: { opens: string | null; closes: string | null; deregisterUntil: string | null } | null
+  groups: { name: string; opens: string | null; closes: string | null }[]
+}
+
 /** Is this a course page (and not TISS's "Loading..." page or an error)? */
 export function isCoursePage(html: string, courseKey: string): boolean {
   const title = /<title>([^<]*)<\/title>/i.exec(html)?.[1] ?? ''
@@ -73,11 +79,40 @@ export function parseExamTable(html: string, courseKey: string): ParsedExam[] {
   return [...exams.values()].sort((a, b) => a.start.localeCompare(b.start))
 }
 
-/** The table whose columns include "Datum" and "Anmeldefrist" – the group tables have other columns. */
-function findTable(html: string): { columns: string[]; rows: string[][] } | null {
+/**
+ * "LVA-Anmeldung": a plain table Von | Bis | Abmeldung bis. "Gruppen-Anmeldung": one row per group,
+ * Gruppe | Anmeldung Von | Bis.
+ */
+export function parseRegistrations(html: string): ParsedRegistrations {
+  let course: ParsedRegistrations['course'] = null
+  // Only up to the next heading: some courses have no table there ("Die Anmeldung erfolgt über Gruppen-Anmeldung").
+  const start = html.search(/>\s*LVA-Anmeldung\s*<\/h2>/i)
+  const end = start >= 0 ? html.indexOf('<h2', start + 1) : -1
+  const section = start < 0 ? '' : html.slice(start, end < 0 ? undefined : end)
+  const table = /<table\b[\s\S]*?<\/table>/i.exec(section)?.[0]
+  if (table) {
+    const heads = [...table.matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/gi)].map((match) => text(match[1]!))
+    const cells = [...table.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map((match) => text(match[1]!))
+    const moment = (title: string): string | null => {
+      const index = heads.indexOf(title)
+      return index >= 0 ? parseWindow(cells[index] ?? '')[0] : null
+    }
+    if (cells.length > 0) course = { opens: moment('Von'), closes: moment('Bis'), deregisterUntil: moment('Abmeldung bis') }
+  }
+  const groupTable = findTable(html, ['Gruppe', 'Anmeldung Von'])
+  const groups = (groupTable?.rows ?? []).flatMap((row) => {
+    const cell = (title: string): string => text(row[groupTable!.columns.indexOf(title)] ?? null)
+    const name = cell('Gruppe')
+    return name ? [{ name, opens: parseWindow(cell('Anmeldung Von'))[0], closes: parseWindow(cell('Bis'))[0] }] : []
+  })
+  return { course, groups }
+}
+
+/** The data table whose column titles include all of `titles`. */
+function findTable(html: string, titles = ['Datum', 'Anmeldefrist']): { columns: string[]; rows: string[][] } | null {
   for (const [table] of html.matchAll(/<table\b[\s\S]*?<\/table>/gi)) {
     const columns = [...table.matchAll(/<th\b[^>]*\baria-label="([^"]*)"/gi)].map((match) => decode(match[1]!))
-    if (!columns.includes('Datum') || !columns.includes('Anmeldefrist')) continue
+    if (!titles.every((title) => columns.includes(title))) continue
     const rows = [...table.matchAll(/<tr\b[^>]*\bdata-ri="\d+"[^>]*>([\s\S]*?)<\/tr>/gi)].map((row) =>
       [...row[1]!.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map((cell) => cell[1]!)
     )

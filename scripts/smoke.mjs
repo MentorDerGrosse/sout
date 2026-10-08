@@ -125,13 +125,36 @@ function exams(second) {
   }
 }
 
+/** LVA registration (with the last day to deregister) and group registration per course. */
+function registrations() {
+  const closesSoon = new Date(now.getTime() + 20 * 60 * 60_000)
+  return {
+    // deregistration still possible – shown; no groups
+    '123.456': { lva: { opens: day(-30, 0), closes: day(-5, 23, 59), deregister: day(20, 23, 59) }, groups: [] },
+    // in a group already ("234.567-group" in the calendar) – its group windows aren't shown; deregistration is over
+    '234.567': {
+      lva: { opens: day(-30, 0), closes: day(-5, 23, 59), deregister: day(-3, 23, 59) },
+      groups: [{ name: 'Übungsgruppe 1', opens: day(-1, 8), closes: closesSoon }]
+    },
+    // no group yet: two groups open (closing within a day), one later; no LVA table
+    '345.678': {
+      lva: null,
+      groups: [
+        { name: 'Gruppe 1', opens: day(-1, 18), closes: closesSoon },
+        { name: 'Gruppe 2', opens: day(-1, 18), closes: closesSoon },
+        { name: 'Gruppe 3', opens: day(10, 8), closes: day(15, 23, 59) }
+      ]
+    }
+  }
+}
+
 const pad = (n) => String(n).padStart(2, '0')
 const tissDay = (date) => `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()}`
 const tissTime = (date) => `${pad(date.getHours())}:${pad(date.getMinutes())}`
 const WEEKDAYS = ['So.', 'Mo.', 'Di.', 'Mi.', 'Do.', 'Fr.', 'Sa.']
 
-/** Like TISS's course page: one table row per room, a group table with other columns next to it. */
-function coursePage([key, type, title], list) {
+/** Like TISS's course page: exams (one table row per room), groups and their dates, LVA and group registration. */
+function coursePage([key, type, title], list, registration) {
   const heads = ['Tag', 'Zeit', 'Datum', 'Ort', 'Prüfungsmodus', 'Anmeldefrist', 'Anmeldung', 'Prüfung']
   let index = 0
   const rows = list.flatMap((exam) =>
@@ -158,14 +181,31 @@ function coursePage([key, type, title], list) {
 <h2>Prüfungen</h2><div class="ui-datatable"><table role="grid"><thead><tr>${heads.map(th).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>
 <h2>Gruppen &amp; Termine</h2><div class="ui-datatable"><table role="grid"><thead><tr>${th('Gruppe')}${th('Datum')}</tr></thead>
 <tbody><tr data-ri="0" class="ui-widget-content"><td role="gridcell">Gruppe 1</td><td role="gridcell">${tissDay(day(5))}</td></tr></tbody></table></div>
+<h2>LVA-Anmeldung</h2>
+${
+  registration.lva
+    ? `<table class="standard big"><thead><tr><th>Von</th><th>Bis</th><th>Abmeldung bis</th></tr></thead>
+<tr><td>${moment(registration.lva.opens)} </td><td>${moment(registration.lva.closes)} </td><td>${moment(registration.lva.deregister)} </td></tr></table>`
+    : '<p>Die Anmeldung erfolgt über Gruppen-Anmeldung. </p>'
+}
+<h2>Gruppen-Anmeldung</h2><div class="ui-datatable"><table role="grid"><thead><tr>${th('Gruppe')}${th('Anmeldung Von')}${th('Bis')}</tr></thead>
+<tbody>${registration.groups
+    .map((group, row) => `<tr data-ri="${row}" class="ui-widget-content"><td role="gridcell">${group.name}</td><td role="gridcell">${moment(group.opens)}</td><td role="gridcell">${moment(group.closes)}</td></tr>`)
+    .join('')}</tbody></table></div>
+<h2>Curricula</h2>
 </body></html>
 `
 }
 
+const moment = (date) => `${tissDay(date)} ${tissTime(date)}`
+
 function writePages(folder, second) {
   mkdirSync(folder, { recursive: true })
   const list = exams(second)
-  for (const course of courses) writeFileSync(join(folder, `${course[0].replace('.', '')}.html`), coursePage(course, list[course[0]] ?? []))
+  const registration = registrations()
+  for (const course of courses) {
+    writeFileSync(join(folder, `${course[0].replace('.', '')}.html`), coursePage(course, list[course[0]] ?? [], registration[course[0]]))
+  }
 }
 
 function tuwel(extra) {
@@ -248,8 +288,12 @@ for (const [sync, expected] of Object.entries(expectedExams)) {
 const examCount = Object.keys(report.exams?.first ?? {}).length
 if (examCount !== Object.keys(expectedExams.first).length) problems.push(`${examCount} statt ${Object.keys(expectedExams.first).length} Prüfungstermine gelesen`)
 if (!(report.changes ?? []).some((change) => change.startsWith('exam: Neue Prüfung in TISS'))) problems.push('Neuer Prüfungstermin in TISS nicht gemeldet')
-// An assignment due within 20 hours and a registration closing within 20 hours.
-if (report.trayUrgent !== 2) problems.push(`Tray: ${report.trayUrgent} statt 2 Fristen in den nächsten 24 Stunden`)
+// Group registrations only where you are in no group yet; deregistration only while still possible.
+// Soonest first: the opening if still ahead, otherwise the end.
+const expectedDeadlines = ['345.678 group Gruppe 1+Gruppe 2 open', '345.678 group Gruppe 3 soon', '123.456 deregister']
+if (JSON.stringify(report.deadlines) !== JSON.stringify(expectedDeadlines)) problems.push(`Fristen: ${JSON.stringify(report.deadlines)} statt ${JSON.stringify(expectedDeadlines)}`)
+// An assignment, an exam registration and a group registration, each ending within 20 hours.
+if (report.trayUrgent !== 3) problems.push(`Tray: ${report.trayUrgent} statt 3 Fristen in den nächsten 24 Stunden`)
 if (report.notes?.protocol?.pdf !== 200 || report.notes?.protocol?.outside !== 404) problems.push(`sout-file: ${JSON.stringify(report.notes?.protocol)}`)
 // Linux with a tray host (GNOME): the mini view opens with the tray menu and closes from it.
 if (report.trayMenu && typeof report.trayMenu === 'object') {

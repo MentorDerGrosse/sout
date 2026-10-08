@@ -1,4 +1,4 @@
-import type { ExamDate } from './types'
+import type { CourseDeadline, ExamDate } from './types'
 
 // Where an exam registration stands – used by the reminders in the main process and by the UI.
 
@@ -27,6 +27,17 @@ export function examStatus(exam: ExamDate, now: number): ExamStatus {
   if (closes !== null && now >= closes) return 'closed'
   if (opens !== null && now < opens) return 'soon'
   return opens !== null || closes !== null ? 'open' : 'none'
+}
+
+/** A group registration window: open, opening later, or marked as not needed. */
+export function deadlineStatus(deadline: CourseDeadline, now: number): 'open' | 'soon' | 'dismissed' {
+  if (deadline.dismissed) return 'dismissed'
+  return deadline.opens && Date.parse(deadline.opens) > now ? 'soon' : 'open'
+}
+
+/** The course's groups in TISS, where you register for one. */
+export function tissGroupsUrl(courseKey: string, semester: string): string {
+  return `https://tiss.tuwien.ac.at/education/course/groupList.xhtml?courseNr=${courseKey.replace('.', '')}&semester=${semester}`
 }
 
 /** You still have to register: the window is open, or it opens later. */

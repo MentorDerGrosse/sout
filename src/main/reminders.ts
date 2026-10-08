@@ -1,7 +1,7 @@
 import { app, Notification } from 'electron'
 import { join } from 'node:path'
-import { EXAM_URGENT_MS, examStatus } from '../shared/exams'
-import type { ExamDate, Task } from '../shared/types'
+import { deadlineStatus, EXAM_URGENT_MS, examStatus } from '../shared/exams'
+import type { CourseDeadline, ExamDate, Task } from '../shared/types'
 import { calendarData } from './calendar'
 import { examsData } from './exams'
 import { readJson, writeJson } from './jsonFile'
@@ -39,8 +39,13 @@ export function refreshUrgent(): void {
     const due = Date.parse(task.due)
     return due > now && due - now <= DAY_MS
   })
-  // Exam registrations that close within a day and you aren't registered for.
-  const closing = examsData().exams.filter((exam) => examStatus(exam, now) === 'open' && exam.closes && Date.parse(exam.closes) - now <= EXAM_URGENT_MS)
+  // Exam and group registrations that close within a day and you aren't registered for.
+  const { exams, deadlines } = examsData()
+  const closingSoon = (closes: string | null): boolean => closes !== null && Date.parse(closes) - now <= EXAM_URGENT_MS
+  const closing = [
+    ...exams.filter((exam) => examStatus(exam, now) === 'open' && closingSoon(exam.closes)),
+    ...deadlines.filter((deadline) => deadline.kind === 'group' && deadlineStatus(deadline, now) === 'open' && closingSoon(deadline.closes))
+  ]
   setTrayUrgent(urgent.length + closing.length)
 }
 
@@ -81,26 +86,32 @@ function check(): void {
   }
 
   if (settings.notifyExamRegistration) {
-    for (const exam of examsData().exams) {
-      // Open now and not registered (nor marked as not needed).
-      if (examStatus(exam, now) !== 'open') continue
-      if (exam.opens) {
-        const key = `exam:${exam.id}|opens|${exam.opens}`
-        if (now - Date.parse(exam.opens) < OPENED_WINDOW_MS && !shown[key]) {
-          notifyExamOpened(exam)
-          shown[key] = exam.opens
+    const { exams, deadlines } = examsData()
+    // Exam and group registrations open now that you aren't registered for (nor marked as not needed).
+    const registrations = [
+      ...exams.filter((exam) => examStatus(exam, now) === 'open').map((exam) => ({ id: `exam:${exam.id}`, opens: exam.opens, closes: exam.closes, notice: examNotice(exam) })),
+      ...deadlines
+        .filter((deadline) => deadline.kind === 'group' && deadlineStatus(deadline, now) === 'open')
+        .map((deadline) => ({ id: `group:${deadline.id}`, opens: deadline.opens, closes: deadline.closes, notice: groupNotice(deadline) }))
+    ]
+    for (const registration of registrations) {
+      if (registration.opens) {
+        const key = `${registration.id}|opens|${registration.opens}`
+        if (now - Date.parse(registration.opens) < OPENED_WINDOW_MS && !shown[key]) {
+          showNotice(registration.notice.opened)
+          shown[key] = registration.opens
           changed = true
         }
       }
-      if (!exam.closes || offsets.length === 0) continue
-      const closes = Date.parse(exam.closes)
+      if (!registration.closes || offsets.length === 0) continue
+      const closes = Date.parse(registration.closes)
       const reached = offsets.filter((minutes) => now >= closes - minutes * 60_000)
       if (reached.length === 0) continue
-      const keys = reached.map((minutes) => `exam:${exam.id}|${exam.closes}|${minutes}`)
-      if (!shown[keys[keys.length - 1]!]) notifyExamClosing(exam, closes - now)
+      const keys = reached.map((minutes) => `${registration.id}|${registration.closes}|${minutes}`)
+      if (!shown[keys[keys.length - 1]!]) showNotice(registration.notice.closing(closes - now))
       for (const key of keys) {
         if (!shown[key]) {
-          shown[key] = exam.closes
+          shown[key] = registration.closes
           changed = true
         }
       }
@@ -149,32 +160,43 @@ function notifyOpened(task: Task): void {
 const dateFormat = new Intl.DateTimeFormat('de-AT', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 const dayFormat = new Intl.DateTimeFormat('de-AT', { weekday: 'short', day: 'numeric', month: 'short' })
 
-/** "EB · Test 1" */
-function examLabel(exam: ExamDate): string {
-  const course = calendarData().courses.find((c) => c.key === exam.courseKey)?.shortName ?? exam.courseKey
-  return `${course} · ${exam.name}`
-}
+const courseName = (key: string): string => calendarData().courses.find((course) => course.key === key)?.shortName ?? key
 
 /** "Prüfung Do., 17. Dez., 10:00" */
 const examWhen = (exam: ExamDate): string => `Prüfung ${(exam.allDay ? dayFormat : dateFormat).format(new Date(exam.start))}`
 
-function notifyExamOpened(exam: ExamDate): void {
-  const until = exam.closes ? ` bis ${dateFormat.format(new Date(exam.closes))}` : ''
-  const notification = new Notification({
-    title: `Prüfungsanmeldung offen: ${examLabel(exam)}`,
-    body: `Anmelden ${exam.registration ?? ''}${until}`.replace(/\s+/g, ' ') + ` – ${examWhen(exam)}`,
-    icon: resourcePath('icon.png')
-  })
-  notification.on('click', () => showMain('exams'))
-  notification.show()
+interface Notice {
+  title: string
+  body: string
 }
 
-function notifyExamClosing(exam: ExamDate, remainingMs: number): void {
-  const notification = new Notification({
-    title: `Prüfungsanmeldung endet in ${remaining(remainingMs)}: ${examLabel(exam)}`,
-    body: `Anmeldeschluss ${dateFormat.format(new Date(exam.closes!))} – ${examWhen(exam)}`,
-    icon: resourcePath('icon.png')
-  })
+/** What to say when a registration window opens and before it closes. */
+interface WindowNotice {
+  opened: Notice
+  closing: (remainingMs: number) => Notice
+}
+
+function examNotice(exam: ExamDate): WindowNotice {
+  const label = `${courseName(exam.courseKey)} · ${exam.name}`
+  const until = exam.closes ? ` bis ${dateFormat.format(new Date(exam.closes))}` : ''
+  return {
+    opened: { title: `Prüfungsanmeldung offen: ${label}`, body: `Anmelden ${exam.registration ?? ''}${until}`.replace(/\s+/g, ' ') + ` – ${examWhen(exam)}` },
+    closing: (ms) => ({ title: `Prüfungsanmeldung endet in ${remaining(ms)}: ${label}`, body: `Anmeldeschluss ${dateFormat.format(new Date(exam.closes!))} – ${examWhen(exam)}` })
+  }
+}
+
+function groupNotice(deadline: CourseDeadline): WindowNotice {
+  const course = courseName(deadline.courseKey)
+  const groups = deadline.groups.length > 3 ? `${deadline.groups.slice(0, 3).join(', ')} und ${deadline.groups.length - 3} weitere` : deadline.groups.join(', ')
+  const until = deadline.closes ? ` bis ${dateFormat.format(new Date(deadline.closes))}` : ''
+  return {
+    opened: { title: `Gruppenanmeldung offen: ${course}`, body: `In TISS${until} – ${groups}` },
+    closing: (ms) => ({ title: `Gruppenanmeldung endet in ${remaining(ms)}: ${course}`, body: `Anmeldeschluss ${dateFormat.format(new Date(deadline.closes!))} – ${groups}` })
+  }
+}
+
+function showNotice(notice: Notice): void {
+  const notification = new Notification({ ...notice, icon: resourcePath('icon.png') })
   notification.on('click', () => showMain('exams'))
   notification.show()
 }

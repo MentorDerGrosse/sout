@@ -2,10 +2,10 @@ import { app, powerMonitor, session } from 'electron'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { currentSemester, tissCourseUrl } from '../shared/tu'
-import type { CalendarEvent, Course, ExamDate, ExamsData } from '../shared/types'
+import type { CalendarEvent, Course, CourseDeadline, ExamDate, ExamsData } from '../shared/types'
 import { calendarData } from './calendar'
 import { reportChanges, type NewChange } from './changes'
-import { isCoursePage, parseExamTable, type ParsedExam } from './examParser'
+import { isCoursePage, parseExamTable, parseRegistrations, type ParsedExam, type ParsedRegistrations } from './examParser'
 import { readJson, writeJson } from './jsonFile'
 import { roomInfo } from './rooms'
 import { getSettings } from './settings'
@@ -30,6 +30,11 @@ interface StoredExam extends ParsedExam {
   semester: string
 }
 
+interface StoredRegistrations extends ParsedRegistrations {
+  courseKey: string
+  semester: string
+}
+
 /** A course page: one per course and semester. */
 interface CoursePage {
   key: string
@@ -45,6 +50,8 @@ interface PageState {
 /** What the course pages said (exams.json). */
 interface Cache {
   exams: StoredExam[]
+  /** LVA and group registration of each page. */
+  registrations: StoredRegistrations[]
   /** By "<LVA number> <semester>". */
   pages: Record<string, PageState>
   syncedAt: string | null
@@ -53,7 +60,7 @@ interface Cache {
 }
 
 const file = (): string => join(app.getPath('userData'), 'exams.json')
-const EMPTY: Cache = { exams: [], pages: {}, syncedAt: null, dismissed: [] }
+const EMPTY: Cache = { exams: [], registrations: [], pages: {}, syncedAt: null, dismissed: [] }
 
 let cache: Cache | null = null
 let syncing: Promise<void> | null = null
@@ -109,6 +116,7 @@ export function examsData(): ExamsData {
   )
   return {
     exams: exams.sort((a, b) => a.start.localeCompare(b.start)),
+    deadlines: courseDeadlines(cached.registrations.filter((entry) => relevant.has(entry.courseKey)), events, dismissed, now),
     failed: pages.flatMap((page) => {
       const error = cached.pages[pageId(page)]?.error
       return error ? [{ courseKey: page.key, error }] : []
@@ -117,6 +125,36 @@ export function examsData(): ExamsData {
     syncedAt: cached.syncedAt,
     syncing: syncing !== null
   }
+}
+
+/**
+ * Group registration windows of courses you aren't in a group of yet (the TISS calendar has no group
+ * appointments for them) – groups with the same window together; and deregistration deadlines.
+ */
+function courseDeadlines(registrations: StoredRegistrations[], events: CalendarEvent[], dismissed: Set<string>, now: number): CourseDeadline[] {
+  const inGroup = new Set(events.filter((event) => event.kind === 'group' && event.ownId === null).map((event) => event.courseKey))
+  const ahead = (iso: string | null): boolean => iso !== null && Date.parse(iso) > now
+  const deadlines: CourseDeadline[] = []
+  for (const { courseKey, semester, course, groups } of registrations) {
+    if (!inGroup.has(courseKey)) {
+      const windows = new Map<string, CourseDeadline>()
+      for (const group of groups.filter((candidate) => ahead(candidate.closes))) {
+        const id = `${courseKey}|group|${group.opens}|${group.closes}`
+        const known = windows.get(id)
+        if (known) known.groups.push(group.name)
+        else windows.set(id, { id, courseKey, semester, kind: 'group', groups: [group.name], opens: group.opens, closes: group.closes, dismissed: dismissed.has(id) })
+      }
+      deadlines.push(...windows.values())
+    }
+    if (course && ahead(course.deregisterUntil)) {
+      const id = `${courseKey}|deregister`
+      deadlines.push({ id, courseKey, semester, kind: 'deregister', groups: [], opens: null, closes: course.deregisterUntil, dismissed: dismissed.has(id) })
+    }
+  }
+  // A course read in two semesters lists the same windows twice. Soonest first: the opening if ahead, else the end.
+  const unique = [...new Map(deadlines.map((deadline) => [deadline.id, deadline])).values()]
+  const next = (deadline: CourseDeadline): string => (ahead(deadline.opens) ? deadline.opens! : deadline.closes!)
+  return unique.sort((a, b) => next(a).localeCompare(next(b)))
 }
 
 /**
@@ -190,13 +228,16 @@ export function syncExams(force = false): Promise<void> {
     const now = new Date().toISOString()
     // By id: a course read in two semesters may list the same exam twice.
     const exams = new Map<string, StoredExam>()
+    const registrations: StoredRegistrations[] = []
     const states: Record<string, PageState> = {}
     const added: StoredExam[] = []
     for (const [index, page] of pages.entries()) {
       if (index > 0 && !devDir) await delay(PAUSE_MS)
       const before = previous.pages[pageId(page)]
       try {
-        const found = parseExamTable(await readCoursePage(page.key, page.semester), page.key)
+        const html = await readCoursePage(page.key, page.semester)
+        const found = parseExamTable(html, page.key)
+        registrations.push({ ...parseRegistrations(html), courseKey: page.key, semester: page.semester })
         for (const exam of found) {
           if (exams.has(exam.id)) continue
           exams.set(exam.id, { ...exam, courseKey: page.key, semester: page.semester })
@@ -209,12 +250,13 @@ export function syncExams(force = false): Promise<void> {
         for (const exam of previous.exams) {
           if (exam.courseKey === page.key && exam.semester === page.semester && !exams.has(exam.id)) exams.set(exam.id, exam)
         }
+        registrations.push(...(previous.registrations ?? []).filter((entry) => entry.courseKey === page.key && entry.semester === page.semester))
         states[pageId(page)] = { readAt: before?.readAt ?? null, error: error instanceof Error ? error.message : String(error) }
       }
     }
     const upcoming = (exam: StoredExam): boolean => Date.parse(exam.end) > Date.now()
     // Read again: "Brauche ich nicht" may have been clicked in the meantime.
-    saveCache({ ...loadCache(), exams: [...exams.values()].filter(upcoming), pages: states, syncedAt: now })
+    saveCache({ ...loadCache(), exams: [...exams.values()].filter(upcoming), registrations, pages: states, syncedAt: now })
     reportChanges(added.filter(upcoming).map(examChange), getSettings().notifyExamRegistration)
   })().finally(() => {
     syncing = null

@@ -1,10 +1,28 @@
 import { useState, type ReactNode } from 'react'
-import { CalendarX2, ChevronDown, CircleCheck, CircleDashed, EyeOff, LockKeyhole, RefreshCw, Ticket, type LucideIcon } from 'lucide-react'
-import type { CalendarData, ExamDate, ExamsData, View } from '../../../shared/types'
+import { CalendarX2, ChevronDown, CircleCheck, CircleDashed, ExternalLink, Eye, EyeOff, LockKeyhole, RefreshCw, Ticket, UserMinus, Users, type LucideIcon } from 'lucide-react'
+import { tissGroupsUrl } from '../../../shared/exams'
+import { tissCourseUrl } from '../../../shared/tu'
+import type { CalendarData, CourseDeadline, ExamDate, ExamsData, View } from '../../../shared/types'
 import { Callout } from '../components'
 import { ExamInfo } from '../ExamInfo'
 import { useCalendar } from '../lib/calendar'
-import { examCourse, examRemaining, examStatus, examTimeText, examUrgent, splitExams, useExams, windowText, type ExamStatus } from '../lib/exams'
+import {
+  deadlineRemaining,
+  deadlineStatus,
+  deadlineText,
+  deadlineTitle,
+  deadlineUrgent,
+  examCourse,
+  examRemaining,
+  examStatus,
+  examTimeText,
+  examUrgent,
+  groupsText,
+  splitExams,
+  useExams,
+  windowText,
+  type ExamStatus
+} from '../lib/exams'
 import { useNow } from '../lib/hooks'
 
 const syncFormat = new Intl.DateTimeFormat('de-AT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
@@ -19,6 +37,20 @@ export default function ExamsView({ onNavigate }: { onNavigate: (view: View) => 
 
   const { open, soon, registered, other } = splitExams(data.exams, now)
   const card = (exam: ExamDate): ReactNode => <ExamCard key={exam.id} exam={exam} calendar={calendar} now={now} />
+  const deadlineCard = (deadline: CourseDeadline): ReactNode => <DeadlineCard key={deadline.id} deadline={deadline} calendar={calendar} now={now} />
+  // Group registrations go with the exam registrations; the earlier end (or opening) first.
+  const groupsIn = (status: 'open' | 'soon'): CourseDeadline[] =>
+    data.deadlines.filter((deadline) => deadline.kind === 'group' && deadlineStatus(deadline, now.getTime()) === status)
+  // Plain string order: ISO dates, and "~" (after the digits) puts exams without a window last.
+  const merged = (exams: ExamDate[], groups: CourseDeadline[], key: (item: ExamDate | CourseDeadline) => string): ReactNode[] =>
+    [...exams, ...groups]
+      .sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0))
+      .map((item) => ('kind' in item ? deadlineCard(item) : card(item)))
+  const openItems = merged(open, groupsIn('open'), (item) => item.closes ?? ('start' in item ? item.start : ''))
+  const soonItems = merged(soon, groupsIn('soon'), (item) => item.opens ?? `~${'start' in item ? item.start : ''}`)
+  const deregister = data.deadlines.filter((deadline) => deadline.kind === 'deregister' && !deadline.dismissed)
+  const dismissedDeadlines = data.deadlines.filter((deadline) => deadline.dismissed)
+  const otherCount = other.length + dismissedDeadlines.length
 
   return (
     <>
@@ -62,14 +94,14 @@ export default function ExamsView({ onNavigate }: { onNavigate: (view: View) => 
         </section>
       )}
 
-      {open.length > 0 && (
-        <Section title="Anmeldung offen" count={open.length} hint="Jetzt in TISS anmelden – was zuerst schließt, steht oben.">
-          {open.map(card)}
+      {openItems.length > 0 && (
+        <Section title="Anmeldung offen" count={openItems.length} hint="Jetzt in TISS anmelden – was zuerst schließt, steht oben.">
+          {openItems}
         </Section>
       )}
-      {soon.length > 0 && (
-        <Section title="Anmeldung noch nicht offen" count={soon.length} hint="Sortiert danach, was zuerst aufmacht.">
-          {soon.map(card)}
+      {soonItems.length > 0 && (
+        <Section title="Anmeldung noch nicht offen" count={soonItems.length} hint="Sortiert danach, was zuerst aufmacht.">
+          {soonItems}
         </Section>
       )}
       {registered.length > 0 && (
@@ -77,19 +109,29 @@ export default function ExamsView({ onNavigate }: { onNavigate: (view: View) => 
           {registered.map(card)}
         </Section>
       )}
-      {other.length > 0 && (
+      {deregister.length > 0 && (
+        <Section title="LVA-Abmeldung" count={deregister.length} hint="Bis dahin kannst du dich in TISS von der LVA abmelden.">
+          {deregister.map(deadlineCard)}
+        </Section>
+      )}
+      {otherCount > 0 && (
         <section className="task-section">
           <button type="button" className="group-toggle" aria-expanded={showOther} onClick={() => setShowOther(!showOther)}>
-            <ChevronDown size={14} className={showOther ? '' : 'rotated'} /> Vorbei oder nicht nötig ({other.length})
+            <ChevronDown size={14} className={showOther ? '' : 'rotated'} /> Vorbei oder nicht nötig ({otherCount})
           </button>
-          {showOther && other.map(card)}
+          {showOther && (
+            <>
+              {other.map(card)}
+              {dismissedDeadlines.map(deadlineCard)}
+            </>
+          )}
         </section>
       )}
 
       {data.courses > 0 && (
         <p className="section-hint exams-note">
           Die Prüfungen deiner LVAs aus dem TISS-Kalender ({data.courses}) – ausgeblendete Fächer fehlen. sout liest die TISS-Seiten alle paar Stunden; angemeldet
-          bist du, sobald die Prüfung in deinem TISS-Kalender steht.
+          bist du, sobald die Prüfung in deinem TISS-Kalender steht. Gruppenanmeldungen zeigt sout nur bei LVAs, in denen du noch in keiner Gruppe bist.
         </p>
       )}
     </>
@@ -126,6 +168,77 @@ const STATUS_ICONS: Record<ExamStatus, LucideIcon> = {
   closed: CalendarX2,
   dismissed: EyeOff,
   none: CircleDashed
+}
+
+const deadlineFormat = new Intl.DateTimeFormat('de-AT', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+
+/** A group registration window or a deregistration deadline. */
+function DeadlineCard(props: { deadline: CourseDeadline; calendar: CalendarData | null; now: Date }) {
+  const { deadline, now } = props
+  const [expanded, setExpanded] = useState(false)
+  const course = props.calendar?.courses.find((candidate) => candidate.key === deadline.courseKey)
+  const soon = deadlineStatus(deadline, now.getTime()) === 'soon'
+  const urgent = deadlineUrgent(deadline, now)
+  const group = deadline.kind === 'group'
+  const Icon = deadline.dismissed ? EyeOff : group ? (soon ? LockKeyhole : Users) : UserMinus
+  return (
+    <article className={`task-card exam-card${deadline.dismissed ? ' faded' : ''}${soon ? ' not-yet' : ''}`}>
+      <span className="event-bar" style={{ background: course?.color ?? 'var(--text-muted)' }} />
+      <span className={`exam-status ${soon ? 'soon' : group ? 'open' : 'none'}${urgent ? ' urgent' : ''}`}>
+        <Icon size={16} />
+      </span>
+      <button type="button" className="task-body" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
+        <span className="task-head">
+          <span className="task-title">
+            {course?.shortName ?? deadline.courseKey} · {deadlineTitle(deadline)}
+          </span>
+          <span className={`task-when exam-when ${soon ? 'soon' : ''}${urgent ? ' urgent' : ''}`}>{deadline.dismissed ? 'ausgeblendet' : deadlineText(deadline, now)}</span>
+        </span>
+        <span className="task-head">
+          <span className="task-meta">{group ? `${deadline.groups.length === 1 ? 'Gruppe' : `${deadline.groups.length} Gruppen`}: ${groupsText(deadline.groups)}` : 'Abmelden in TISS'}</span>
+          <span className={`task-remaining${urgent ? ' urgent' : ''}`}>{deadlineRemaining(deadline, now)}</span>
+        </span>
+      </button>
+      {expanded && (
+        <div className="task-details">
+          <dl className="info-list">
+            {group && (
+              <>
+                <dt>Gruppen</dt>
+                <dd>{deadline.groups.join(', ')}</dd>
+              </>
+            )}
+            <dt>{group ? 'Anmeldung' : 'Abmeldung bis'}</dt>
+            <dd>
+              {deadline.opens && `${deadlineFormat.format(new Date(deadline.opens))} – `}
+              {deadline.closes && deadlineFormat.format(new Date(deadline.closes))}
+            </dd>
+            {course && (
+              <>
+                <dt>LVA</dt>
+                <dd>
+                  {course.key} {course.type} {course.title}
+                </dd>
+              </>
+            )}
+          </dl>
+          <div className="task-actions">
+            <a
+              className={`button small${group && !soon ? '' : ' secondary'}`}
+              href={group ? tissGroupsUrl(deadline.courseKey, deadline.semester) : tissCourseUrl(deadline.courseKey, deadline.semester)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <ExternalLink size={13} /> {group ? 'Gruppen in TISS' : 'LVA in TISS'}
+            </a>
+            <button type="button" className="button small secondary" onClick={() => void window.sout.dismissExam(deadline.id, !deadline.dismissed)}>
+              {deadline.dismissed ? <Eye size={13} /> : <EyeOff size={13} />} {deadline.dismissed ? 'Wieder einblenden' : 'Brauche ich nicht'}
+            </button>
+          </div>
+        </div>
+      )}
+    </article>
+  )
 }
 
 function ExamCard(props: { exam: ExamDate; calendar: CalendarData | null; now: Date }) {

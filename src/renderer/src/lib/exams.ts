@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { EXAM_URGENT_MS, examStatus, type ExamStatus } from '../../../shared/exams'
-import type { CalendarData, Course, ExamDate, ExamsData } from '../../../shared/types'
+import { deadlineStatus, EXAM_URGENT_MS, examStatus, type ExamStatus } from '../../../shared/exams'
+import type { CalendarData, Course, CourseDeadline, ExamDate, ExamsData } from '../../../shared/types'
 import { formatTime, HOLIDAY_COLOR } from './calendar'
 import { dueText, remainingText } from './tasks'
 
@@ -20,7 +20,7 @@ export function useExams(): ExamsData | null {
   return data
 }
 
-export { examStatus, type ExamStatus }
+export { deadlineStatus, examStatus, type ExamStatus }
 
 export function examCourse(exam: ExamDate, calendar: CalendarData | null): { name: string; color: string; course: Course | undefined } {
   const course = calendar?.courses.find((candidate) => candidate.key === exam.courseKey)
@@ -59,11 +59,48 @@ export function examsToAct(exams: ExamDate[], now: Date, days: number): ExamDate
   return [...open, ...soon.filter((exam) => exam.opens && Date.parse(exam.opens) <= until)]
 }
 
+const within = (iso: string | null, now: Date, days: number): boolean => Boolean(iso) && Date.parse(iso!) - now.getTime() <= days * DAY_MS
+
 /** For the mini window: registrations closing within three days, or opening within a day. */
 export function examsDueSoon(exams: ExamDate[], now: Date): ExamDate[] {
   const { open, soon } = splitExams(exams, now)
-  const within = (iso: string | null, days: number): boolean => Boolean(iso) && Date.parse(iso!) - now.getTime() <= days * DAY_MS
-  return [...open.filter((exam) => within(exam.closes, 3)), ...soon.filter((exam) => within(exam.opens, 1))]
+  return [...open.filter((exam) => within(exam.closes, now, 3)), ...soon.filter((exam) => within(exam.opens, now, 1))]
+}
+
+/** Group registrations open now or opening within `days` (not marked as not needed), soonest end first. */
+export function groupWindowsToAct(deadlines: CourseDeadline[], now: Date, days: number): CourseDeadline[] {
+  return deadlines.filter((deadline) => {
+    if (deadline.kind !== 'group') return false
+    const status = deadlineStatus(deadline, now.getTime())
+    return status === 'open' || (status === 'soon' && within(deadline.opens, now, days))
+  })
+}
+
+/** For the mini window: group registrations closing within three days or opening within a day. */
+export function groupWindowsDueSoon(deadlines: CourseDeadline[], now: Date): CourseDeadline[] {
+  return groupWindowsToAct(deadlines, now, 1).filter((deadline) => deadlineStatus(deadline, now.getTime()) === 'soon' || within(deadline.closes, now, 3))
+}
+
+/** "Gruppenanmeldung", "LVA-Abmeldung" */
+export const deadlineTitle = (deadline: CourseDeadline): string => (deadline.kind === 'group' ? 'Gruppenanmeldung' : 'LVA-Abmeldung')
+
+/** "Mi10a, Mi10b, Mi12a und 4 weitere" */
+export function groupsText(groups: string[], max = 3): string {
+  return groups.length > max ? `${groups.slice(0, max).join(', ')} und ${groups.length - max} weitere` : groups.join(', ')
+}
+
+/** "bis Fr., 9. Okt., 18:00" or "öffnet Mi., 4. Nov., 08:00". */
+export function deadlineText(deadline: CourseDeadline, now: Date): string {
+  return deadlineStatus(deadline, now.getTime()) === 'soon' ? `öffnet ${dueText(deadline.opens!, now)}` : `bis ${dueText(deadline.closes!, now)}`
+}
+
+export function deadlineRemaining(deadline: CourseDeadline, now: Date): string {
+  return remainingText(deadlineStatus(deadline, now.getTime()) === 'soon' ? deadline.opens! : deadline.closes!, now)
+}
+
+/** Ends within a day. */
+export function deadlineUrgent(deadline: CourseDeadline, now: Date): boolean {
+  return deadlineStatus(deadline, now.getTime()) === 'open' && Date.parse(deadline.closes!) - now.getTime() < EXAM_URGENT_MS
 }
 
 /** Registration window closes within a day. */

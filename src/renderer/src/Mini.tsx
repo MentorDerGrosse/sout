@@ -5,7 +5,7 @@ import { ExamList } from './ExamList'
 import { TaskList } from './TaskList'
 import { nextUp, useTasks } from './lib/tasks'
 import { useCalendar } from './lib/calendar'
-import { examsDueSoon, useExams } from './lib/exams'
+import { examsDueSoon, groupWindowsDueSoon, useExams } from './lib/exams'
 import { formatShortDate } from './lib/dates'
 import { useAppState, useNow } from './lib/hooks'
 
@@ -17,9 +17,10 @@ export default function Mini() {
   const calendar = useCalendar()
   const tasks = useTasks()
   const exams = useExams()
-  // Exam registrations that end soon come first; three rows in all, so the day plan keeps its room.
+  // Exam and group registrations that end soon come first; three rows in all, so the day plan keeps its room.
   const registrations = exams ? examsDueSoon(exams.exams, now).slice(0, 2) : []
-  const due = tasks ? nextUp(tasks, now, 3 - registrations.length) : []
+  const groups = exams ? groupWindowsDueSoon(exams.deadlines, now).slice(0, 2 - registrations.length) : []
+  const due = tasks ? nextUp(tasks, now, 3 - registrations.length - groups.length) : []
 
   return (
     <div className="mini">
@@ -51,10 +52,10 @@ export default function Mini() {
         <h3>
           <ClipboardList size={13} /> Fällig
         </h3>
-        {registrations.length > 0 && <ExamList exams={registrations} calendar={calendar} now={now} short />}
+        {registrations.length + groups.length > 0 && <ExamList exams={registrations} deadlines={groups} calendar={calendar} now={now} short />}
         {due.length > 0 ? (
           <TaskList tasks={due} calendar={calendar} now={now} />
-        ) : registrations.length > 0 ? null : tasks?.connected ? (
+        ) : registrations.length + groups.length > 0 ? null : tasks?.connected ? (
           <p className="mini-empty">Nichts offen.</p>
         ) : (
           <p className="mini-empty">

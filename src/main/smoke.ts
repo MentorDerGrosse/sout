@@ -2,7 +2,7 @@ import { app, BrowserWindow, Menu, net, screen } from 'electron'
 import { execFile } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { examStatus } from '../shared/exams'
+import { deadlineStatus, examStatus } from '../shared/exams'
 import { IPC, type View } from '../shared/types'
 import { autostartEntry } from './autostart'
 import { calendarChanged, calendarData, startCalendarSync, syncCalendar } from './calendar'
@@ -88,6 +88,9 @@ export async function runSmokeTest(dir: string): Promise<void> {
     // The course pages after the calendar: it says which courses are yours.
     await syncExams(true)
     report['exams'] = { first: examReport() }
+    report['deadlines'] = examsData().deadlines.map((deadline) =>
+      [deadline.courseKey, deadline.kind, deadline.groups.join('+'), deadline.kind === 'group' ? deadlineStatus(deadline, Date.now()) : ''].filter(Boolean).join(' ')
+    )
     addSampleOwnEvents()
     report['trayHost'] = await trayHostAvailable()
     createTray(report['trayHost'] as boolean | null)

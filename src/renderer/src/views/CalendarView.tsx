@@ -165,6 +165,37 @@ export default function CalendarView(props: { onNavigate: (view: View) => void; 
       }
     }
   }
+  // Group registrations (courses without a group yet) as bars, deregistration deadlines on their day.
+  if (exams && !hiddenKinds.has('registration')) {
+    for (const deadline of exams.deadlines) {
+      if (deadline.dismissed || !deadline.closes) continue
+      const course = courses.get(deadline.courseKey)
+      const name = course?.shortName ?? deadline.courseKey
+      const color = course?.color ?? HOLIDAY_COLOR
+      const closes = closingMoment(deadline.closes)
+      const style = {
+        allDay: true,
+        backgroundColor: `color-mix(in srgb, ${color} 28%, transparent)`,
+        borderColor: color,
+        textColor: 'var(--text)',
+        classNames: ['kind-exam-window']
+      }
+      if (deadline.kind === 'deregister') {
+        events.push({ ...style, id: `deadline:${deadline.id}`, title: `${formatTime(closes.toISOString())} LVA-Abmeldung endet: ${name}`, start: isoDate(closes) })
+      } else if (deadline.opens && !listView) {
+        events.push({
+          ...style,
+          id: `deadline:${deadline.id}`,
+          title: `Gruppenanmeldung: ${name} · bis ${closingFormat.format(closes)} ${formatTime(closes.toISOString())}`,
+          start: isoDate(new Date(deadline.opens)),
+          end: isoDate(addDays(closes, 1))
+        })
+      } else {
+        if (deadline.opens) events.push({ ...style, id: `deadline-opens:${deadline.id}`, title: `${formatTime(deadline.opens)} Gruppenanmeldung öffnet: ${name}`, start: isoDate(new Date(deadline.opens)) })
+        events.push({ ...style, id: `deadline:${deadline.id}`, title: `${formatTime(closes.toISOString())} Gruppenanmeldung endet: ${name}`, start: isoDate(closes) })
+      }
+    }
+  }
   const shownExam = selectedExam ? exams?.exams.find((exam) => exam.id === selectedExam) : undefined
 
   const toggleKind = (kind: Filter): void => {
@@ -268,6 +299,8 @@ export default function CalendarView(props: { onNavigate: (view: View) => void; 
             const id = info.event.id
             if (id.startsWith('task:')) {
               onNavigate('deadlines')
+            } else if (id.startsWith('deadline')) {
+              onNavigate('exams')
             } else if (id.startsWith('exam')) {
               setSelected(null)
               setSelectedExam(id.slice(id.indexOf(':') + 1))
