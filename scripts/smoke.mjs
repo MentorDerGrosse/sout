@@ -136,10 +136,16 @@ if (report.error) problems.push(`Fehler: ${report.error}`)
 for (const [check, ok] of Object.entries(report.notes?.editing ?? {})) if (!ok) problems.push(`Notizen: ${check} fehlgeschlagen`)
 if ((report.changes ?? []).length < 5) problems.push(`Nur ${(report.changes ?? []).length} von 5 erwarteten Änderungen erkannt`)
 if (report.notes?.protocol?.pdf !== 200 || report.notes?.protocol?.outside !== 404) problems.push(`sout-file: ${JSON.stringify(report.notes?.protocol)}`)
+// Linux with a tray host (GNOME): the mini view opens with the tray menu and closes from it.
+if (report.trayMenu && typeof report.trayMenu === 'object') {
+  for (const [check, ok] of Object.entries(report.trayMenu)) if (!ok) problems.push(`Tray-Menü: ${check} fehlgeschlagen`)
+}
+if (report.miniAfterClose === false) problems.push('Nach dem Schließen des Hauptfensters ist die Mini-Ansicht nicht aufgegangen')
 const failedShots = Object.entries(report.screenshots ?? {}).filter(([, result]) => !/^\d+x\d+$/.test(result))
 if (failedShots.length > 0) problems.push(`Screenshots: ${failedShots.map(([name, result]) => `${name} (${result})`).join(', ')}`)
 
 console.log(`\n${Object.keys(report.screenshots ?? {}).length} Screenshots in ${dir}`)
+if (report.trayMenu) console.log(`  Tray-Menü: ${JSON.stringify(report.trayMenu)}`)
 for (const change of report.changes ?? []) console.log(`  erkannt: ${change}`)
 if (problems.length > 0) {
   console.error(`\nTestlauf mit Problemen:\n- ${problems.join('\n- ')}`)

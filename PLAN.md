@@ -143,6 +143,10 @@ Dazu:
 - [x] Seitenleiste links einklappbar (nur Symbole) und in der Breite verstellbar
 - [x] „Heute“: Abgabedaten bleiben in der Kachel, auch bei langen Titeln (ebenso im Mini-Fenster)
 - [x] `npm run smoke`: Testlauf mit erfundenen Daten, für alle Systeme
+- [x] GNOME: Ein Klick aufs Symbol öffnet das Menü – die Mini-Ansicht kommt jetzt gleich mit (wie unter Windows, wo der Klick sie direkt öffnet). Die AppIndicator-Erweiterung meldet einen einfachen Klick nicht an die App, und Electron sagt nicht, wann sein Menü aufgeht; sout hört deshalb mit `busctl monitor` auf dem Sitzungsbus mit, wann sein Menü geöffnet wird. Im Menü ist „Mini-Ansicht“ ein Häkchen, abhaken schließt sie.
+- [x] Schließen des Hauptfensters öffnet die Mini-Ansicht (Linux, Windows, macOS) – wie bei der JetBrains Toolbox; ein Klick daneben schickt sie ins Symbol; abschaltbar („Beim Schließen die Mini-Ansicht zeigen“)
+- [x] Fehler behoben: Unter GNOME ging beim Start auch die Mini-Ansicht auf. GNOME fragt beim Anmelden eines Tray-Symbols von sich aus `AboutToShow` ab; sout reagiert jetzt nur auf das echte Öffnen des Menüs (`Event "opened"`)
+- [x] Mauszeiger nach dem Hochfahren nicht mehr winzig: Beim Autostart startet XWayland erst mit sout, GNOMEs X11-Einstellungen (Zeigergröße) kommen eine knappe Sekunde später – sout wartet jetzt bis zu 4 Sekunden darauf, statt einmal zu früh zu fragen
 
 ### Phase 5 – Windows & Mac (zum Schluss)
 

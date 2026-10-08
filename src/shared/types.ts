@@ -12,6 +12,8 @@ export function isView(value: unknown): value is View {
 export interface Settings {
   /** When started by the session autostart, stay in the tray instead of opening the main window. */
   startHiddenOnAutostart: boolean
+  /** Closing the main window opens the mini view (instead of only the tray icon). */
+  miniOnClose: boolean
   /** The "still running in the background" notification has been shown once. */
   closeHintShown: boolean
   /** Remind about deadlines this many minutes before they are due. */

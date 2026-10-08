@@ -2,10 +2,12 @@ import { app, Menu, nativeImage, Tray, type NativeImage, type Rectangle } from '
 import { IPC } from '../shared/types'
 import { isAutostartEnabled, setAutostart } from './autostart'
 import { resourcePath } from './paths'
-import { broadcast, showMain, toggleMini } from './windows'
+import { stopWatchingTrayMenu, watchTrayMenu } from './trayMenuWatch'
+import { broadcast, isMiniVisible, onMiniVisibility, showMain, showMiniWithMenu, toggleMini } from './windows'
 
 let tray: Tray | null = null
 let createdWithHost = false
+let listening = false
 /** Deadlines within the next 24 hours: the icon gets a red dot. */
 let urgent = 0
 
@@ -29,6 +31,14 @@ export function createTray(hostAvailable: boolean | null): void {
   tray.on('click', (_event, bounds?: Rectangle) => toggleMini(bounds && bounds.width > 0 ? bounds : undefined))
   // macOS opens a context menu on left click as well – there it comes with the right click only.
   if (process.platform === 'darwin') tray.on('right-click', () => tray?.popUpContextMenu(menu()))
+  if (!listening) {
+    listening = true
+    // The tick at "Mini-Ansicht" follows the mini window.
+    onMiniVisibility(refreshTrayMenu)
+    // GNOME opens the menu on a single click – the mini view comes along (see trayMenuWatch.ts).
+    watchTrayMenu(showMiniWithMenu)
+    app.on('before-quit', stopWatchingTrayMenu)
+  }
   refreshTrayMenu()
   showStatus()
 }
@@ -45,7 +55,8 @@ export function refreshTrayMenu(): void {
 
 function menu(): Menu {
   return Menu.buildFromTemplate([
-    { label: 'Mini-Ansicht', click: () => toggleMini() },
+    // Ticked while the mini view is open; unticking closes it.
+    { label: 'Mini-Ansicht', type: 'checkbox', checked: isMiniVisible(), click: () => toggleMini() },
     { label: 'sout öffnen', click: () => showMain() },
     { label: 'Einstellungen', click: () => showMain('settings') },
     { type: 'separator' },

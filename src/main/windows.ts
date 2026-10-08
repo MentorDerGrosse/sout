@@ -8,12 +8,15 @@ const MINI_SIZE = { width: 360, height: 560 }
 const MINI_MARGIN = 8
 /** A click on the tray icon first blurs (and thereby hides) an open mini window – don't reopen it right away. */
 const REOPEN_GUARD_MS = 300
+/** GNOME opens the tray menu only after the double-click time; a click that just closed the mini view shouldn't bring it back with the menu. */
+const MENU_REOPEN_GUARD_MS = 1500
 
 let mainWindow: BrowserWindow | null = null
 let miniWindow: BrowserWindow | null = null
 let miniHiddenAt = 0
 let quitting = false
 let onMainClosed: (() => void) | null = null
+const miniListeners: (() => void)[] = []
 
 app.on('before-quit', () => {
   quitting = true
@@ -174,25 +177,58 @@ export function positionMini(win: BrowserWindow, anchor?: Rectangle): void {
   )
 }
 
+export const isMiniVisible = (): boolean => miniWindow?.isVisible() ?? false
+
+/** Called whenever the mini window appears or goes (the tray menu shows it as a tick). */
+export function onMiniVisibility(listener: () => void): void {
+  miniListeners.push(listener)
+}
+
+/** `focus`: false keeps the focus where it is, e.g. in GNOME's open tray menu. */
+function showMini(anchor: Rectangle | undefined, focus: boolean): void {
+  const win = miniWindow ?? createMiniWindow()
+  positionMini(win, anchor)
+  if (focus) win.show()
+  else win.showInactive()
+  // Window managers may place a newly mapped window themselves; insist on our spot.
+  positionMini(win, anchor)
+  if (focus) win.focus()
+  for (const listener of miniListeners) listener()
+}
+
 /** `anchor`: where the tray icon is, if the system says so. */
 export function toggleMini(anchor?: Rectangle): void {
-  const win = miniWindow ?? createMiniWindow()
-  if (win.isVisible()) {
+  if (isMiniVisible()) {
     hideMini()
     return
   }
   if (Date.now() - miniHiddenAt < REOPEN_GUARD_MS) return
-  positionMini(win, anchor)
-  win.show()
-  // Window managers may place a newly mapped window themselves; insist on our spot.
-  positionMini(win, anchor)
-  win.focus()
+  showMini(anchor, true)
+}
+
+/**
+ * The main window was closed: the small window takes over (like the JetBrains Toolbox) – with
+ * focus, so a click anywhere else sends it to the tray icon. Can be switched off in the settings.
+ */
+export function miniTakesOver(): void {
+  if (getSettings().miniOnClose) showMini(undefined, true)
+}
+
+/**
+ * GNOME: a click on the tray icon opened its menu – the mini view comes along. It doesn't take
+ * the focus from the menu, so it stays until it is unticked there ("Mini-Ansicht"), or until it
+ * was clicked into and then away from.
+ */
+export function showMiniWithMenu(): void {
+  if (isMiniVisible() || Date.now() - miniHiddenAt < MENU_REOPEN_GUARD_MS) return
+  showMini(undefined, false)
 }
 
 export function hideMini(): void {
   if (!miniWindow?.isVisible()) return
   miniWindow.hide()
   miniHiddenAt = Date.now()
+  for (const listener of miniListeners) listener()
 }
 
 /** Where the tray icon sits, for texts. */

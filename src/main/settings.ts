@@ -5,6 +5,7 @@ import { readJson, writeJson } from './jsonFile'
 
 const DEFAULTS: Settings = {
   startHiddenOnAutostart: true,
+  miniOnClose: true,
   closeHintShown: false,
   reminders: [1440, 180],
   notifyOpening: true,

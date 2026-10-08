@@ -35,6 +35,9 @@ Mac-Pakete nur auf einem Mac). Das Ergebnis liegt in `dist/`.
    - **RPM** (mit Eintrag in der App-Übersicht): einmal `sudo dnf install rpm-build`, dann `npm run dist:linux` und
      `sudo dnf install ./dist/sout-0.1.0-x86_64.rpm`. Startet danach mit `sout` oder aus der App-Übersicht.
 3. Oder ohne Paket aus dem Projektordner, siehe [Ins System einbinden](#ins-system-einbinden-linux-aus-dem-projektordner).
+4. Ein Klick aufs Symbol öffnet das Menü und gleich die Mini-Ansicht dazu; „Mini-Ansicht“ im Menü abhaken schließt
+   sie wieder. (GNOME öffnet bei einem Klick immer das Menü – sout hört mit, wann das passiert. Ein Doppelklick
+   öffnet oder schließt nur die Mini-Ansicht.)
 
 ### Windows
 
@@ -68,7 +71,8 @@ lässt dort den Testlauf laufen und legt Installer und Screenshots zum Herunterl
 ### Überall gleich
 
 - **Autostart:** in der App unter Einstellungen oder im Menü des Symbols
-- **Schließen** beendet sout nicht, es bleibt beim Symbol; ganz beenden mit Strg+Q (Mac: Cmd+Q) oder „Beenden“ im Menü
+- **Schließen** beendet sout nicht: Das Hauptfenster wird zur Mini-Ansicht beim Symbol, ein Klick daneben schickt sie
+  ins Symbol (in den Einstellungen abschaltbar). Ganz beenden mit Strg+Q (Mac: Cmd+Q) oder „Beenden“ im Menü
 
 ## Aus dem Quellcode (Entwicklung)
 
