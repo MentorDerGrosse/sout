@@ -1,5 +1,6 @@
 import { app, BrowserWindow, Notification, nativeTheme, screen, shell, type Rectangle } from 'electron'
 import { fileURLToPath } from 'node:url'
+import { DARK_PALETTES, LIGHT_PALETTES, palette } from '../shared/themes'
 import { IPC, type View } from '../shared/types'
 import { preloadPath, rendererHtml, resourcePath } from './paths'
 import { getSettings, updateSettings } from './settings'
@@ -27,8 +28,24 @@ export function setOnMainClosed(listener: () => void): void {
   onMainClosed = listener
 }
 
+/** The page background of the chosen colour scheme – shown before the page has loaded. */
 function backgroundColor(): string {
-  return nativeTheme.shouldUseDarkColors ? '#1b1c1f' : '#f5f6f8'
+  const { lightPalette, darkPalette } = getSettings()
+  return nativeTheme.shouldUseDarkColors ? palette(DARK_PALETTES, darkPalette).background : palette(LIGHT_PALETTES, lightPalette).background
+}
+
+let followingSystem = false
+
+/** Light, dark or as the system says (that also switches the pages' prefers-color-scheme). */
+export function applyTheme(): void {
+  nativeTheme.themeSource = getSettings().themeMode
+  for (const win of BrowserWindow.getAllWindows()) win.setBackgroundColor(backgroundColor())
+  if (followingSystem) return
+  followingSystem = true
+  // The system switched between light and dark.
+  nativeTheme.on('updated', () => {
+    for (const win of BrowserWindow.getAllWindows()) win.setBackgroundColor(backgroundColor())
+  })
 }
 
 /** The URL hash tells the page which window it is and what to show: "mini", "calendar", "notes:<note path>". */

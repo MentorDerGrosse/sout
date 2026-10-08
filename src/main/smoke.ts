@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, nativeTheme, net, screen } from 'electron'
+import { app, BrowserWindow, Menu, net, screen } from 'electron'
 import { execFile } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -21,10 +21,11 @@ import { fetchGrades } from './tuwelGrades'
 import { fetchSnapshot } from './tuwelTasks'
 import { registerIpc } from './ipc'
 import { getSecret, secretsStatus } from './secrets'
+import { getSettings, updateSettings } from './settings'
 import { trayHostAvailable, windowSystem } from './system'
 import { fetchTissFeed } from './tiss'
 import { createTray, trayUrgent } from './tray'
-import { broadcast, createMainWindow, createMiniWindow, isMiniVisible, miniTakesOver, setOnMainClosed } from './windows'
+import { applyTheme, broadcast, createMainWindow, createMiniWindow, isMiniVisible, miniTakesOver, setOnMainClosed } from './windows'
 
 // `--smoke-test=<dir>`: starts everything without showing a window, takes screenshots of the views,
 // writes report.json and quits. Uses its own data folder and no keyring, so it also works on an
@@ -72,7 +73,8 @@ export async function runSmokeTest(dir: string): Promise<void> {
     await app.whenReady()
     // SOUT_SMOKE_THEME=light|dark checks the other colour scheme without touching the GNOME setting.
     const theme = process.env['SOUT_SMOKE_THEME']
-    if (theme === 'light' || theme === 'dark') nativeTheme.themeSource = theme
+    if (theme === 'light' || theme === 'dark') updateSettings({ themeMode: theme })
+    applyTheme()
     report['gpu'] = app.getGPUFeatureStatus()
     Menu.setApplicationMenu(null)
     registerIpc()
@@ -145,6 +147,7 @@ export async function runSmokeTest(dir: string): Promise<void> {
     Object.assign(screenshots, await smokeExams(main, dir))
     Object.assign(screenshots, await smokeOwnEvents(main, dir, report))
     Object.assign(screenshots, await smokeChanges(main, mini, dir, report))
+    Object.assign(screenshots, await smokeThemes(main, dir))
     await smokeTrayMenu(report)
     Object.assign(screenshots, await smokeNotes(main, mini, dir, report))
     // smokeNotes ends by closing the main window.
@@ -161,6 +164,39 @@ export async function runSmokeTest(dir: string): Promise<void> {
     report['error'] = error instanceof Error ? error.stack : String(error)
     finish(1)
   }
+}
+
+/** The colour schemes: the choice in the settings, then "Heute" in each scheme (and the calendar in one). */
+async function smokeThemes(main: BrowserWindow, dir: string): Promise<Record<string, string>> {
+  const shots: Record<string, string> = {}
+  const original = getSettings()
+  main.webContents.send(IPC.navigate, 'settings')
+  await delay(400)
+  await main.webContents.executeJavaScript(`document.querySelector('.palette-choices')?.scrollIntoView({ block: 'center' })`)
+  await delay(1000)
+  shots['settings-appearance'] = await screenshot(main, dir, 'settings-appearance')
+  const schemes = [
+    { themeMode: 'light', lightPalette: 'latte' },
+    { themeMode: 'light', lightPalette: 'solarized' },
+    { themeMode: 'dark', darkPalette: 'mocha' },
+    { themeMode: 'dark', darkPalette: 'nord' }
+  ] as const
+  for (const scheme of schemes) {
+    const name = 'lightPalette' in scheme ? scheme.lightPalette : scheme.darkPalette
+    updateSettings(scheme)
+    applyTheme()
+    broadcast(IPC.stateChanged)
+    for (const view of name === 'mocha' ? (['today', 'calendar'] as const) : (['today'] as const)) {
+      main.webContents.send(IPC.navigate, view)
+      await delay(1200)
+      shots[`theme-${name}${view === 'today' ? '' : `-${view}`}`] = await screenshot(main, dir, `theme-${name}${view === 'today' ? '' : `-${view}`}`)
+    }
+  }
+  updateSettings({ themeMode: original.themeMode, lightPalette: original.lightPalette, darkPalette: original.darkPalette })
+  applyTheme()
+  broadcast(IPC.stateChanged)
+  await delay(500)
+  return shots
 }
 
 /** Exam statuses by "<LVA number> <name>". */
@@ -658,6 +694,43 @@ export async function dumpGrades(file: string): Promise<void> {
     writeFileSync(file, `${JSON.stringify(grades, null, 2)}\n`)
   } catch (error) {
     console.log(`[grades] failed: ${error instanceof Error ? error.message : String(error)}`)
+    code = 1
+  } finally {
+    profile.done()
+    app.exit(code)
+  }
+}
+
+/**
+ * `--tuwel-calls=<file>` (development only): calls the TUWEL web service functions listed in
+ * SOUT_TUWEL_CALLS (JSON: [["core_webservice_get_site_info", {}], …]) with a fresh token from a copy
+ * of the stored login and saves the answers – to look at what TUWEL offers. Prints only counts.
+ */
+export function tuwelCallsFile(argv: string[]): string | null {
+  const arg = argv.find((value) => value.startsWith('--tuwel-calls='))
+  return arg && !app.isPackaged ? arg.slice('--tuwel-calls='.length) : null
+}
+
+export async function tuwelCalls(file: string): Promise<void> {
+  const profile = useOwnProfile()
+  cpSync(join(profile.realUserData, 'Partitions', 'tuwel'), join(app.getPath('userData'), 'Partitions', 'tuwel'), { recursive: true })
+  await app.whenReady()
+  let code = 0
+  try {
+    const calls = JSON.parse(process.env['SOUT_TUWEL_CALLS'] ?? '[]') as [string, Record<string, unknown>][]
+    const token = await trySilent('session')
+    const answers: { call: string; args: Record<string, unknown>; result?: unknown; error?: string }[] = []
+    for (const [name, args] of calls) {
+      try {
+        answers.push({ call: name, args, result: await tuwelCall(token, name, args) })
+      } catch (error) {
+        answers.push({ call: name, args, error: error instanceof TuwelError ? `${error.code}: ${error.message}` : String(error) })
+      }
+    }
+    writeFileSync(file, `${JSON.stringify(answers, null, 2)}\n`)
+    console.log(`[tuwel] ${answers.length} Aufrufe, ${answers.filter((answer) => answer.error).length} mit Fehler`)
+  } catch (error) {
+    console.log(`[tuwel] failed: ${error instanceof Error ? error.message : String(error)}`)
     code = 1
   } finally {
     profile.done()

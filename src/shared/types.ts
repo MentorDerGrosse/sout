@@ -1,5 +1,7 @@
 // Contract between the main process and the UI. The preload script exposes SoutApi as window.sout.
 
+import type { ThemeMode } from './themes'
+
 export type View = 'today' | 'calendar' | 'deadlines' | 'exams' | 'notes' | 'settings'
 
 const VIEWS: readonly string[] = ['today', 'calendar', 'deadlines', 'exams', 'notes', 'settings']
@@ -30,6 +32,11 @@ export interface Settings {
   notifyGrades: boolean
   /** Exam registrations in TISS: notify when they open, remind before they close, report new exam dates. */
   notifyExamRegistration: boolean
+  /** Light, dark, or as the system says. */
+  themeMode: ThemeMode
+  /** Colour scheme in light and in dark mode (ids from shared/themes.ts). */
+  lightPalette: string
+  darkPalette: string
 }
 
 /** Reminder times offered in the settings: minutes before a deadline → label. */

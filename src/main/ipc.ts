@@ -14,7 +14,7 @@ import { trayHostAvailable, windowSystem } from './system'
 import { addTodo, deleteTodo, loginTuwel, logoutTuwel, setTaskDone, syncTasks, tasksData } from './tasks'
 import { parseTissToken, testTissFeed } from './tiss'
 import { refreshTrayMenu } from './tray'
-import { broadcast, hideMini, showMain } from './windows'
+import { applyTheme, broadcast, hideMini, showMain } from './windows'
 
 const ok = <T>(value: T): Result<T> => ({ ok: true, value })
 const fail = (error: unknown): Result<never> => ({
@@ -63,6 +63,7 @@ export function registerIpc(): void {
     // The notes folder only changes through setupNotes, which also creates it.
     const allowed = patch && typeof patch === 'object' ? { ...patch, notesDir: undefined } : patch
     const settings = updateSettings(allowed)
+    applyTheme()
     changed()
     return settings
   })

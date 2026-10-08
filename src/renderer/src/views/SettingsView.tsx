@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { FolderOpen, KeyRound, LoaderCircle, LogIn, LogOut } from 'lucide-react'
+import { Check, FolderOpen, KeyRound, LoaderCircle, LogIn, LogOut } from 'lucide-react'
+import { DARK_PALETTES, LIGHT_PALETTES, THEME_MODES, type Palette } from '../../../shared/themes'
 import { REMINDER_CHOICES, type AppInfo, type Course, type SecretsStatus, type Settings } from '../../../shared/types'
 import { Callout, Command, Toggle } from '../components'
 import { syncStatus, useCalendar } from '../lib/calendar'
@@ -92,6 +93,8 @@ export default function SettingsView() {
         )}
       </section>
 
+      <AppearanceSection settings={settings} />
+
       <section className="section">
         <h2>Zugänge</h2>
         <div className="rows">
@@ -118,6 +121,80 @@ export default function SettingsView() {
         </div>
       </section>
     </>
+  )
+}
+
+/** Light, dark or as the system says – and a colour scheme for each. */
+function AppearanceSection({ settings }: { settings: Settings }) {
+  const update = (patch: Partial<Settings>): void => void window.sout.updateSettings(patch)
+  return (
+    <section className="section">
+      <h2>Erscheinungsbild</h2>
+      <div className="rows">
+        <div className="row">
+          <div className="row-text">
+            <div className="row-title">Hell oder dunkel</div>
+            <div className="row-desc">„Wie das System“ wechselt mit der Hell-/Dunkel-Einstellung deines Systems.</div>
+          </div>
+          <div className="segmented" role="radiogroup" aria-label="Hell oder dunkel">
+            {THEME_MODES.map((mode) => (
+              <button
+                key={mode.id}
+                type="button"
+                role="radio"
+                aria-checked={settings.themeMode === mode.id}
+                className={settings.themeMode === mode.id ? 'active' : undefined}
+                onClick={() => update({ themeMode: mode.id })}
+              >
+                {mode.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <PaletteRow title="Helles Farbschema" hint="Gilt, wenn sout hell ist." palettes={LIGHT_PALETTES} value={settings.lightPalette} onChange={(id) => update({ lightPalette: id })} />
+        <PaletteRow title="Dunkles Farbschema" hint="Gilt, wenn sout dunkel ist." palettes={DARK_PALETTES} value={settings.darkPalette} onChange={(id) => update({ darkPalette: id })} />
+      </div>
+    </section>
+  )
+}
+
+function PaletteRow(props: { title: string; hint: string; palettes: Palette[]; value: string; onChange: (id: string) => void }) {
+  return (
+    <div className="row column">
+      <div className="row-text">
+        <div className="row-title">{props.title}</div>
+        <div className="row-desc">{props.hint}</div>
+      </div>
+      <div className="palette-choices" role="radiogroup" aria-label={props.title}>
+        {props.palettes.map((palette) => {
+          const [page, card, accent, text] = palette.swatch
+          const active = props.value === palette.id
+          return (
+            <button
+              key={palette.id}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              className={`palette-card${active ? ' active' : ''}`}
+              onClick={() => props.onChange(palette.id)}
+            >
+              {/* A tiny window in the scheme's colours: page, a card with text, an accent button. */}
+              <span className="palette-preview" style={{ background: page }} aria-hidden="true">
+                <span className="palette-preview-card" style={{ background: card }}>
+                  <span className="palette-preview-line" style={{ background: text }} />
+                  <span className="palette-preview-line short" style={{ background: text }} />
+                  <span className="palette-preview-button" style={{ background: accent }} />
+                </span>
+              </span>
+              <span className="palette-name">
+                {palette.label} {active && <Check size={14} />}
+              </span>
+              <span className="palette-hint">{palette.hint}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
