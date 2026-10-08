@@ -1,0 +1,69 @@
+# Builds sout on Linux, Windows and macOS, runs the smoke test there (made-up data, see
+# scripts/smoke.mjs) and keeps the installers and the screenshots as downloads.
+# Starts only by hand: GitHub → Actions → "Bauen & testen" → Run workflow.
+name: Bauen & testen
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Linux – virtueller Bildschirm und RPM-Werkzeug
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb rpm
+          # Ubuntu 24.04 blocks the user namespaces Chromium's sandbox needs.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - run: npm ci
+      # Electron 44 fetches its binary on first use; do it up front.
+      - run: node node_modules/electron/install.js
+      - run: npm run typecheck
+      - run: npm run build
+
+      - name: Testlauf (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run smoke -- smoke
+      - name: Testlauf (Windows, macOS)
+        if: runner.os != 'Linux'
+        run: npm run smoke -- smoke
+
+      - name: Installer bauen
+        run: npx electron-builder --publish never
+
+      - name: Screenshots aufheben
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ runner.os }}
+          path: smoke/*.png
+          if-no-files-found: ignore
+
+      - name: Installer aufheben
+        uses: actions/upload-artifact@v4
+        with:
+          name: sout-${{ runner.os }}
+          path: |
+            dist/*.AppImage
+            dist/*.rpm
+            dist/*.exe
+            dist/*.dmg
+            dist/*-mac-*.zip
+          if-no-files-found: ignore

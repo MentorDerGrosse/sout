@@ -1,12 +1,14 @@
 import type { ReactNode } from 'react'
-import { CalendarDays, Circle, CircleCheck, ClipboardList, Clock, PartyPopper } from 'lucide-react'
-import type { View } from '../../../shared/types'
+import { Bell, CalendarClock, CalendarDays, CalendarPlus, CalendarX2, Circle, CircleCheck, ClipboardList, Clock, DoorOpen, GraduationCap, PartyPopper, X, type LucideIcon } from 'lucide-react'
+import type { Change, View } from '../../../shared/types'
+import { ago, useChanges } from '../lib/changes'
 import { EventList } from '../EventList'
 import { TaskList } from '../TaskList'
 import { nextUp, useTasks } from '../lib/tasks'
 import { holidayOn, upcoming, useCalendar } from '../lib/calendar'
 import { formatLongDate, greeting } from '../lib/dates'
 import { useAppState, useNow } from '../lib/hooks'
+import { trayPlace } from '../lib/platform'
 
 export default function Today({ onNavigate }: { onNavigate: (view: View) => void }) {
   const now = useNow(60_000)
@@ -31,6 +33,8 @@ export default function Today({ onNavigate }: { onNavigate: (view: View) => void
       </header>
 
       <div className="grid">
+        <News now={now} onNavigate={onNavigate} />
+
         <section className="card">
           <h2 className="card-title">
             <CalendarDays size={16} /> Nächste Termine
@@ -97,7 +101,7 @@ export default function Today({ onNavigate }: { onNavigate: (view: View) => void
             <ul className="steps">
               <Step
                 status={state.info.trayAvailable ? 'done' : 'todo'}
-                title="Symbol oben in der Leiste"
+                title={`Symbol ${trayPlace(state.info.platform)}`}
                 hint={
                   state.info.trayAvailable
                     ? 'Schließen versteckt sout nur – ein Klick aufs Symbol öffnet die Mini-Ansicht.'
@@ -146,6 +150,55 @@ export default function Today({ onNavigate }: { onNavigate: (view: View) => void
         )}
       </div>
     </>
+  )
+}
+
+const CHANGE_ICONS: Record<Change['kind'], LucideIcon> = {
+  room: DoorOpen,
+  time: CalendarClock,
+  cancelled: CalendarX2,
+  added: CalendarPlus,
+  exam: CalendarPlus,
+  task: ClipboardList,
+  grade: GraduationCap
+}
+
+/** Changes since the last syncs: room, time, dropped appointments, new exams, assignments, grades. */
+function News({ now, onNavigate }: { now: Date; onNavigate: (view: View) => void }) {
+  const changes = useChanges()
+  if (changes.length === 0) return null
+  const open = (change: Change): void => {
+    if (change.url) window.open(change.url)
+    else if (change.view) onNavigate(change.view)
+  }
+  return (
+    <section className="card span-2 news">
+      <h2 className="card-title">
+        <Bell size={16} /> Neuigkeiten
+        <button type="button" className="link news-clear" onClick={() => void window.sout.dismissChange(null)}>
+          Alle gelesen
+        </button>
+      </h2>
+      <ul className="news-list">
+        {changes.slice(0, 8).map((change) => {
+          const Icon = CHANGE_ICONS[change.kind]
+          return (
+            <li key={change.id} className={`news-item ${change.kind}`}>
+              <Icon size={16} />
+              <button type="button" className="news-text" onClick={() => open(change)}>
+                <span className="news-title">{change.title}</span>
+                <span className="news-detail">{change.detail}</span>
+              </button>
+              <span className="news-when">{ago(change.at, now)}</span>
+              <button type="button" className="icon-button" aria-label="Gelesen" title="Gelesen" onClick={() => void window.sout.dismissChange(change.id)}>
+                <X size={14} />
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+      {changes.length > 8 && <p className="section-hint">und {changes.length - 8} weitere</p>}
+    </section>
   )
 }
 

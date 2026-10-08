@@ -4,6 +4,10 @@ import { join } from 'node:path'
 import type { CalendarData, CalendarEvent, Course, CoursePatch, EventKind } from '../shared/types'
 import { parseIcal, type IcalEvent } from './ical'
 import { readJson, writeJson } from './jsonFile'
+import { reportChanges } from './changes'
+import { ownEvents, ownOccurrences } from './ownEvents'
+import { scheduleChanges } from './scheduleChanges'
+import { getSettings } from './settings'
 import { roomInfo } from './rooms'
 import { getSecret } from './secrets'
 import { fetchTissFeed } from './tiss'
@@ -31,7 +35,7 @@ function loadCache(): Cache {
   if (!cache) {
     const data = readJson(cacheFile()) as Partial<Cache> | undefined
     // Caches written by older versions lack fields that were added later.
-    const events = (data?.events ?? []).map((event) => ({ ...event, otherLocations: event.otherLocations ?? [] }))
+    const events = (data?.events ?? []).map((event) => ({ ...event, id: stableId(event.id), otherLocations: event.otherLocations ?? [], ownId: null }))
     cache = { events, syncedAt: data?.syncedAt ?? null, error: data?.error ?? null }
   }
   return cache
@@ -50,7 +54,13 @@ export function calendarData(): CalendarData {
     const info = name ? roomInfo(name) : null
     if (name && info) rooms[name] = info
   }
-  return { events, courses: courses(events), rooms, syncedAt, error, syncing: syncing !== null }
+  const all = [...events, ...ownOccurrences()].sort((a, b) => a.start.localeCompare(b.start))
+  return { events: all, own: ownEvents(), courses: courses(events), rooms, syncedAt, error, syncing: syncing !== null }
+}
+
+/** Something changed outside of a sync (own appointments): tell the windows. */
+export function calendarChanged(): void {
+  onChange()
 }
 
 /** Reads TISS (or, in development, the file in SOUT_TISS_FILE) and replaces the cached events. */
@@ -62,7 +72,9 @@ export function syncCalendar(): Promise<void> {
     try {
       if (!devFile && !token) return
       const feed = devFile ? readFileSync(devFile, 'utf8') : await fetchTissFeed(token!)
+      const before = loadCache().events
       saveCache({ events: toEvents(parseIcal(feed)), syncedAt: new Date().toISOString(), error: null })
+      reportChanges(scheduleChanges(before, loadCache().events, calendarData().courses), getSettings().notifyChanges)
     } catch (error) {
       // Keep the old events: they are still the best we have when offline.
       saveCache({ ...loadCache(), error: error instanceof Error ? error.message : String(error) })
@@ -104,6 +116,14 @@ export function startCalendarSync(listener: () => void): void {
 // ---------- TISS events → our model ----------
 
 const KINDS: Record<string, EventKind> = { COURSE: 'course', GROUP: 'group', EXAM_SLOT: 'exam', HOLIDAY: 'holiday' }
+
+/**
+ * TISS UIDs look like "20261007T101500Z-1234567@tiss.tuwien.ac.at"; the part before the dash
+ * changes with every download, the rest stays. Only the stable part can recognise an appointment.
+ */
+function stableId(uid: string): string {
+  return /^\d{8}T\d{6}Z?-(.+)$/.exec(uid)?.[1] ?? uid
+}
 /** "123.456 VU Titel …" → LVA number, optional type, rest. */
 const SUMMARY = /^(\d{3}\.[0-9A-Z]{3})\s+(?:([A-Z]{2})\s+)?(.*)$/
 
@@ -127,7 +147,7 @@ function toEvents(raw: IcalEvent[]): CalendarEvent[] {
       detail = (title && rest.startsWith(title) ? rest.slice(title.length) : rest).replace(/^\s*-\s*/, '').trim() || null
     }
     return {
-      id: event.uid,
+      id: stableId(event.uid),
       kind,
       start: event.start.value,
       end: event.end.value,
@@ -136,7 +156,8 @@ function toEvents(raw: IcalEvent[]): CalendarEvent[] {
       title: event.summary,
       detail,
       location: event.location,
-      otherLocations: []
+      otherLocations: [],
+      ownId: null
     }
   })
   return mergeRooms(events).sort((a, b) => a.start.localeCompare(b.start))

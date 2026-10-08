@@ -27,7 +27,11 @@ export function secretsStatus(): SecretsStatus {
 
 export function setSecret(key: SecretKey, value: string): void {
   if (!safeStorage.isEncryptionAvailable()) {
-    throw new Error('Verschlüsselung ist nicht verfügbar – ist der GNOME-Schlüsselbund entsperrt?')
+    throw new Error(
+      process.platform === 'linux'
+        ? 'Verschlüsselung ist nicht verfügbar – ist der Schlüsselbund (z. B. GNOME-Schlüsselbund) entsperrt?'
+        : 'Verschlüsselung ist auf diesem System gerade nicht verfügbar.'
+    )
   }
   const store = load()
   store[key] = safeStorage.encryptString(value).toString('base64')

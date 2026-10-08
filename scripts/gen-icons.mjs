@@ -1,4 +1,4 @@
-// Renders resources/icon.png (app) and resources/tray*.png (top bar) without any image library.
+// Renders the app icon and the tray icons for Linux, Windows and macOS without any image library.
 // The artwork matches the <Logo> SVG in src/renderer/src/components.tsx (64×64 grid).
 // Usage: npm run icons
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -38,32 +38,58 @@ function inGlyph(x, y) {
 const inBackground = (x, y) => roundRect(x, y, 2, 2, 62, 62, 14) <= 0
 const mix = (a, b, t) => Math.round(a + (b - a) * t)
 
-function render(size, { background, scale }) {
+// Red dot top right: "something is due within 24 hours". A transparent ring separates it from the glyph.
+const BADGE = { x: 51, y: 13, r: 11, gap: 4 }
+const inBadge = (x, y) => Math.hypot(x - BADGE.x, y - BADGE.y) <= BADGE.r
+const nearBadge = (x, y) => Math.hypot(x - BADGE.x, y - BADGE.y) <= BADGE.r + BADGE.gap
+
+/**
+ * background: blue rounded square (app icon, Windows tray); otherwise only the glyph in `glyph`
+ * colour – white for GNOME's dark top bar, black as macOS template image.
+ */
+function render(size, { background, scale, badge = false, glyph: glyphColor = 255 }) {
   const samples = 4 // supersampling per axis for smooth edges
   const rgba = Buffer.alloc(size * size * 4)
   for (let py = 0; py < size; py++) {
     for (let px = 0; px < size; px++) {
       let glyph = 0
       let bg = 0
+      let dot = 0
       for (let sy = 0; sy < samples; sy++) {
         for (let sx = 0; sx < samples; sx++) {
           const x = ((px + (sx + 0.5) / samples) / size) * 64
           const y = ((py + (sy + 0.5) / samples) / size) * 64
-          if (inGlyph(32 + (x - 32) / scale, 31.5 + (y - 32) / scale)) glyph++
-          if (background && inBackground(x, y)) bg++
+          if (badge && inBadge(x, y)) dot++
+          else if (badge && nearBadge(x, y)) continue
+          else {
+            if (inGlyph(32 + (x - 32) / scale, 31.5 + (y - 32) / scale)) glyph++
+            if (background && inBackground(x, y)) bg++
+          }
         }
       }
-      const g = glyph / samples ** 2
+      const n = samples ** 2
+      const g = glyph / n
+      const d = dot / n
       const i = (py * size + px) * 4
       if (background) {
         const t = py / (size - 1) // vertical gradient #4d8af0 → #2b5fd9
-        rgba[i] = mix(mix(0x4d, 0x2b, t), 255, g)
-        rgba[i + 1] = mix(mix(0x8a, 0x5f, t), 255, g)
-        rgba[i + 2] = mix(mix(0xf0, 0xd9, t), 255, g)
-        rgba[i + 3] = Math.round((bg / samples ** 2) * 255)
+        const a = bg / n
+        rgba[i] = mix(mix(0x4d, 0x2b, t), 255, a ? g / a : 0)
+        rgba[i + 1] = mix(mix(0x8a, 0x5f, t), 255, a ? g / a : 0)
+        rgba[i + 2] = mix(mix(0xf0, 0xd9, t), 255, a ? g / a : 0)
+        rgba[i + 3] = Math.round(a * 255)
       } else {
-        rgba.fill(255, i, i + 3)
+        rgba.fill(glyphColor, i, i + 3)
         rgba[i + 3] = Math.round(g * 255)
+      }
+      if (d > 0) {
+        // #ef4444 over whatever is below
+        const alpha = rgba[i + 3] / 255
+        const out = d + alpha * (1 - d)
+        rgba[i] = Math.round((0xef * d + rgba[i] * alpha * (1 - d)) / out)
+        rgba[i + 1] = Math.round((0x44 * d + rgba[i + 1] * alpha * (1 - d)) / out)
+        rgba[i + 2] = Math.round((0x44 * d + rgba[i + 2] * alpha * (1 - d)) / out)
+        rgba[i + 3] = Math.round(out * 255)
       }
     }
   }
@@ -107,14 +133,26 @@ function encodePng(size, rgba) {
   ])
 }
 
-mkdirSync(outDir, { recursive: true })
+const glyphOnly = { background: false, scale: 1.5 }
 const icons = {
-  'icon.png': render(256, { background: true, scale: 1 }),
-  // White glyph without background, as usual for icons in GNOME's dark top bar.
-  'tray.png': render(32, { background: false, scale: 1.5 }),
-  'tray@2x.png': render(64, { background: false, scale: 1.5 })
+  'resources/icon.png': render(256, { background: true, scale: 1 }),
+  // For the installers (electron-builder turns it into .ico and .icns).
+  'build/icon.png': render(1024, { background: true, scale: 1 }),
+  // Linux: white glyph without background, as usual in GNOME's dark top bar.
+  'resources/tray.png': render(32, glyphOnly),
+  'resources/tray@2x.png': render(64, glyphOnly),
+  'resources/tray-urgent.png': render(32, { ...glyphOnly, badge: true }),
+  'resources/tray-urgent@2x.png': render(64, { ...glyphOnly, badge: true }),
+  // macOS: black template image, the menu bar colours it itself (16 pt).
+  'resources/trayTemplate.png': render(16, { ...glyphOnly, glyph: 0 }),
+  'resources/trayTemplate@2x.png': render(32, { ...glyphOnly, glyph: 0 }),
+  // Windows: with the blue background, visible on light and dark taskbars.
+  'resources/tray-win.png': render(32, { background: true, scale: 1 }),
+  'resources/tray-win-urgent.png': render(32, { background: true, scale: 1, badge: true })
 }
 for (const [name, png] of Object.entries(icons)) {
-  writeFileSync(join(outDir, name), png)
-  console.log(`resources/${name}`)
+  const path = join(outDir, '..', name)
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, png)
+  console.log(name)
 }

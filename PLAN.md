@@ -1,6 +1,6 @@
 # sout – Plan
 
-Lebendes Dokument, Stand 8. Oktober 2026. Fasst das Brainstorming und alle bisherigen Entscheidungen zusammen.
+Lebendes Dokument, Stand 8. Oktober 2026 (Phasen 0–5 umgesetzt). Fasst das Brainstorming und alle bisherigen Entscheidungen zusammen.
 
 ## Ziel
 
@@ -76,9 +76,9 @@ Dazu:
 - [x] Token-Speicher (verschlüsselt), TISS-URL eintragen und Verbindung testen
 - [x] `npm run install-desktop`: Eintrag in der App-Übersicht und Befehl `~/.local/bin/sout`
 - [x] Start über XWayland mit `--ozone-platform=x11` (ohne den Schalter startet sout sich einmal selbst neu)
-- [ ] Mit installierter Extension prüfen: Öffnet der Linksklick aufs Symbol die Mini-Ansicht? Bekommt das Mini-Fenster den Fokus und schließt es bei Klick daneben?
+- [x] Mit installierter Extension geprüft: Linksklick aufs Symbol öffnet die Mini-Ansicht, Klick daneben schließt sie
 
-### Phase 1 – Kalender (TISS) ✅ (bis auf eigene Termine)
+### Phase 1 – Kalender (TISS) ✅
 
 - [x] TISS-Feed laden (beim Start, stündlich, nach dem Aufwachen) und lokal zwischenspeichern (`calendar.json`) → offline nutzbar, „Stand: …“
 - [x] Fächer automatisch erkennen (LVA-Nr), Typ (VO, UE, VU …); Termine als Vorlesung, Gruppe, Prüfung oder vorlesungsfrei
@@ -88,9 +88,11 @@ Dazu:
 - [x] Kurznamen: lange Titel werden standardmäßig zu Initialen („Einführung in die Beispielkunde 1“ → „EB1“), kurze bleiben; in den Einstellungen änderbar, ebenso Farbe und Ausblenden
 - [x] Termin-Details: Raum mit TUW-Maps-Link und Adresse (Raumliste aus better-tiss-calendar), Link zur LVA in TISS
 - [x] „Heute“ und Mini-Fenster zeigen die nächsten Termine, mit „in 25 min“ / „läuft“
-- [ ] Eigene Termine (Lerngruppe, Lernblöcke)
+- [x] Eigene Termine (Lerngruppe, Lernblöcke …): einmalig oder jede Woche bis zu einem Tag, mit Fach und Ort; anlegen über „+ Termin“ oder durch Aufziehen im Kalender; einzelne Termine per Ziehen verschieben und verlängern; bei Serien einen einzelnen Tag oder die ganze Serie löschen (`events.json`)
+- [x] Kalender auch ohne TISS nutzbar (für eigene Termine), mit Hinweis zum Verbinden
+- [x] TISS-Termine haben jetzt stabile Kennungen: der vordere Teil der TISS-UID ändert sich bei jedem Abruf, sout nimmt nur den hinteren
 
-### Phase 2 – Abgaben & Tests (TUWEL) ✅ (mit echtem Login noch zu prüfen)
+### Phase 2 – Abgaben & Tests (TUWEL) ✅ (Anmeldung wird noch beobachtet)
 
 - [x] TU-Login in eigenem Fenster wie die Moodle-App: `admin/tool/mobile/launch.php` → TU-Wien-Login → `moodlemobile://token=…` (Signatur geprüft), Token verschlüsselt gespeichert
 - [x] Daten über die Moodle-Schnittstelle: Zeitleiste (`core_calendar_get_action_events_by_timesort`), Abgaben (`mod_assign_get_assignments`, `mod_assign_get_submission_status`), Tests (`mod_quiz_get_quizzes_by_courses`); Sync beim Start, alle 30 Minuten, nach dem Aufwachen
@@ -104,9 +106,9 @@ Dazu:
 - [x] Stille Token-Erneuerung bei jeder Synchronisierung, Login übersteht Neustarts, Benachrichtigung wenn neu anmelden nötig
 - [ ] Beobachten, wie lange die stille Erneuerung ohne neuen Login hält (Protokoll: `tokenLog` in `~/.config/sout/tuwel.json`)
 - [ ] Prüfen, ob TUWEL bei Tests den Öffnungszeitpunkt liefert (`--dump-tuwel`)
-- [ ] Klären, warum nach dem manuellen Login erst die Erneuerung im Hintergrund den Token bekommt (Protokoll: `loginTrace` in `tuwel.json`)
+- [ ] Klären, warum nach dem manuellen Login erst die Erneuerung im Hintergrund den Token bekommt (Protokoll: `loginTrace` in `tuwel.json`; beim letzten Login kam keine Fehlermeldung, seither war kein neuer Login nötig – die stille Erneuerung klappt seit 7.10. 22:20 bei jeder Synchronisierung)
 
-### Phase 3 – Notizen ✅ (im Alltag noch zu erproben)
+### Phase 3 – Notizen ✅
 
 - [x] Notizordner frei wählbar (Vorschlag `~/Studium`), eingerichtet erst nach Klick; änderbar in den Einstellungen
 - [x] Pro Fach ein Ordner, nach Semester geordnet (`2026W/<Fach> (<LVA-Nr>)/`), automatisch für jedes Fach aus dem TISS-Kalender – jeder nur einmal, ein gelöschter kommt nicht wieder; frühere Semester stehen in der Liste unter „Weitere Ordner“
@@ -118,7 +120,8 @@ Dazu:
 - [x] Verknüpfungen: Termin → „Mitschrift anlegen/öffnen“, Abgabe → „Notizen anlegen/öffnen“; eine laufende Vorlesung steht oben in der Notizliste
 - [x] Volltextsuche (auch über Dateinamen), Tags mit `#tag`
 - [x] Schnellnotiz aus dem Mini-Fenster → Inbox, später per „In Fach verschieben“ einordnen
-- [ ] Im Alltag ausprobieren: Ordner einrichten, eine Vorlesung mitschreiben, Folien daneben
+- [x] Im Alltag ausprobiert: Notizen und PDFs klappen
+- [x] Liste, Notiz, Vorschau und PDF lassen sich in der Breite verschieben (Trennlinien ziehen; Doppelklick setzt zurück)
 
 ```
 ~/Studium/
@@ -131,25 +134,30 @@ Dazu:
     └── Folien/                ← PDFs
 ```
 
-### Phase 4 – Feinschliff
+### Phase 4 – Feinschliff ✅
 
-- [ ] Mini-Fenster als echte Tagesübersicht – nächste Termine mit Countdown, nächste Abgaben und Schnellnotiz sind schon drin; fehlt: kompakter Tagesplan
-- [ ] Symbol zeigt Dringendes an (z. B. Punkt, wenn in weniger als 24 Stunden etwas fällig ist)
-- [ ] Meldungen bei Änderungen (Raum, Absage, neue Aufgabe, neue Note)
-- [ ] Installation als RPM oder AppImage
+- [x] Mini-Fenster als Tagesübersicht: Tagesplan (Termine und Abgaben von heute der Reihe nach, „jetzt“-Linie, Vergangenes blass; ist der Tag vorbei, der nächste), nächste Abgaben, Schnellnotiz
+- [x] Symbol zeigt Dringendes an: roter Punkt (macOS: Anzahl), wenn in den nächsten 24 Stunden etwas fällig ist
+- [x] Meldungen bei Änderungen, als Benachrichtigung und auf „Heute“ unter „Neuigkeiten“ (bis zum Wegklicken, höchstens zwei Wochen): Raumwechsel, verschobene und entfallene Termine der nächsten zwei Wochen, neue Termine, neue Prüfungstermine (TISS); neue Abgaben und Tests, neue Bewertungen (TUWEL, Bewertungen alle zwei Stunden); jede Art in den Einstellungen abschaltbar
+- [x] Pakete mit electron-builder: AppImage (gebaut und getestet) und RPM (`npm run dist:linux`, braucht `rpm-build`); Autostart zeigt beim AppImage auf die Datei selbst
+- [x] Seitenleiste links einklappbar (nur Symbole) und in der Breite verstellbar
+- [x] „Heute“: Abgabedaten bleiben in der Kachel, auch bei langen Titeln (ebenso im Mini-Fenster)
+- [x] `npm run smoke`: Testlauf mit erfundenen Daten, für alle Systeme
 
 ### Phase 5 – Windows & Mac (zum Schluss)
 
 Gestartet würde sout dort schon, und Kalender, Abgaben und Einstellungen funktionieren; die Desktop-Einbindung ist aber auf Linux/GNOME gebaut:
 
-- [ ] Autostart über die Systemfunktion (`app.setLoginItemSettings`) statt der Linux-`.desktop`-Datei
-- [ ] macOS: App-Menü mit „Bearbeiten“, damit Cmd+C/V/X/A in Eingabefeldern und Cmd+Q funktionieren (bisher nur Strg-Kürzel)
-- [ ] Tray-Symbol je System: macOS als „Template“-Bild in Menüleistengröße, Windows gut sichtbar auch auf heller Taskleiste
-- [ ] Mini-Fenster dort öffnen, wo das Symbol sitzt (Windows: unten rechts über der Taskleiste; `tray.getBounds()`)
-- [ ] Windows: App-Kennung (`app.setAppUserModelId`), damit Benachrichtigungen erscheinen
-- [ ] Texte je System („GNOME“, „oben in der Leiste“, Schlüsselbund); `install-desktop` nur unter Linux anbieten
-- [ ] Auf echten Windows- und Mac-Rechnern testen
-- [ ] Bei Bedarf Installer für Windows bzw. `.dmg` für macOS
+- [x] Autostart über die Systemfunktion (`app.setLoginItemSettings`) statt der Linux-`.desktop`-Datei
+- [x] macOS: App-Menü mit „Bearbeiten“, damit Cmd+C/V/X/A in Eingabefeldern funktionieren; Cmd+Q/W; Dock-Symbol nur, solange das Hauptfenster offen ist
+- [x] Tray-Symbol je System: macOS als „Template“-Bild (Menüleiste färbt es selbst), Windows mit blauem Hintergrund (auf heller und dunkler Taskleiste sichtbar); macOS öffnet das Menü per Rechtsklick
+- [x] Mini-Fenster dort öffnen, wo das Symbol sitzt (Windows/macOS sagen beim Klick, wo es ist; Windows sonst unten rechts)
+- [x] Windows: App-Kennung (`app.setAppUserModelId`), damit Benachrichtigungen erscheinen
+- [x] Texte je System (Taskleiste/Menüleiste/Leiste, Schlüsselbund, Strg/Cmd); GNOME-Hinweise und `install-desktop` nur unter Linux
+- [x] Installer: Windows (NSIS), macOS (.dmg/.zip für Apple Silicon und Intel), nicht signiert; Anleitung in der README
+- [x] GitHub-Ablauf „Bauen & testen“ (von Hand starten): baut auf echten Linux-, Windows- und Mac-Rechnern, lässt dort den Testlauf laufen, Installer und Screenshots zum Herunterladen
+- [ ] Ablauf „Bauen & testen“ einmal auf GitHub laufen lassen und die Windows-/Mac-Screenshots ansehen
+- [ ] Auf echten Windows- und Mac-Rechnern ausprobieren (Tray, Autostart, Benachrichtigungen)
 
 ### Später & Ideen (ganz am Ende, nach Phase 5)
 
@@ -189,4 +197,5 @@ Sonstiges
 
 - Anmeldefristen (LVA, Gruppe, Prüfung) stehen nicht im TISS-Feed (geprüft 7.10.2026: nur COURSE, GROUP, EXAM_SLOT, HOLIDAY).
 - Liefert die TUWEL-Schnittstelle Kreuzerlübungen und Terminbuchungen?
-- Linksklick aufs Tray-Symbol unter GNOME: Mini-Ansicht oder Menü? (Fallback: „Mini-Ansicht“ ist der erste Menüeintrag.)
+- TISS meldet abgesagte Termine (vermutlich) nur, indem sie aus dem Feed verschwinden – sout sagt deshalb „steht nicht mehr im TISS-Kalender“; verschwinden mehr als drei Termine eines Fachs auf einmal, kommt eine Zusammenfassung („abgemeldet oder abgesagt?“).
+- macOS kann Anmeldeobjekten keine Startparameter mitgeben; ob sout beim Anmelden gestartet wurde, erkennt es dort nur, solange macOS das noch meldet (`wasOpenedAtLogin`).

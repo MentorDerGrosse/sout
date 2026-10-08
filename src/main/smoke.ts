@@ -3,30 +3,36 @@ import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } f
 import { join } from 'node:path'
 import { IPC, type View } from '../shared/types'
 import { autostartEntry } from './autostart'
-import { calendarData, startCalendarSync, syncCalendar } from './calendar'
+import { calendarChanged, calendarData, startCalendarSync, syncCalendar } from './calendar'
+import { changes, startChanges } from './changes'
 import { importPdfs, noteForEvent, noteForTask, quickNote, setupNotes } from './courseNotes'
 import { notesData, searchNotes, startNotesWatch, writeNote } from './notes'
 import { handleNotesScheme } from './notesProtocol'
+import { addOwnEvent } from './ownEvents'
+import { refreshUrgent } from './reminders'
 import { startTasksSync, syncTasks, tasksData } from './tasks'
 import { readJson } from './jsonFile'
 import { TuwelError, tuwelCall } from './tuwelApi'
 import { lastLoginTrace, trySilent } from './tuwelLogin'
+import { fetchGrades } from './tuwelGrades'
 import { fetchSnapshot } from './tuwelTasks'
 import { registerIpc } from './ipc'
 import { getSecret, secretsStatus } from './secrets'
 import { trayHostAvailable, windowSystem } from './system'
 import { fetchTissFeed } from './tiss'
-import { createTray } from './tray'
+import { createTray, trayUrgent } from './tray'
 import { broadcast, createMainWindow, createMiniWindow } from './windows'
 
-// `--smoke-test=<dir>` (development only): starts everything without showing a window, takes
-// screenshots of the views, writes report.json and quits. Uses its own data folder and no keyring.
+// `--smoke-test=<dir>`: starts everything without showing a window, takes screenshots of the views,
+// writes report.json and quits. Uses its own data folder and no keyring, so it also works on an
+// installed package (to check the package itself); the test data from SOUT_TISS_FILE etc. only
+// in development.
 
 const FLAG = '--smoke-test='
 
 export function smokeTestDir(argv: string[]): string | null {
   const arg = argv.find((value) => value.startsWith(FLAG))
-  return arg && !app.isPackaged ? arg.slice(FLAG.length) : null
+  return arg ? arg.slice(FLAG.length) : null
 }
 
 export async function runSmokeTest(dir: string): Promise<void> {
@@ -44,7 +50,7 @@ export async function runSmokeTest(dir: string): Promise<void> {
   setTimeout(() => {
     report['error'] = 'timeout'
     finish(1)
-  }, 60_000)
+  }, 120_000)
 
   app.on('child-process-gone', (_e, details) => messages.push(`[child-gone] ${details.type}: ${details.reason} (${details.exitCode})`))
   app.on('browser-window-created', (_e, win) => {
@@ -68,11 +74,15 @@ export async function runSmokeTest(dir: string): Promise<void> {
     registerIpc()
     handleNotesScheme()
     startNotesWatch(() => broadcast(IPC.notesChanged))
+    startChanges(() => broadcast(IPC.changesChanged))
     startCalendarSync(() => broadcast(IPC.calendarChanged))
     startTasksSync(() => broadcast(IPC.tasksChanged))
     await Promise.all([syncCalendar(), syncTasks()])
+    addSampleOwnEvents()
     report['trayHost'] = await trayHostAvailable()
     createTray(report['trayHost'] as boolean | null)
+    refreshUrgent()
+    report['trayUrgent'] = trayUrgent()
     const mini = createMiniWindow()
     const main = createMainWindow('today', false)
     // Hidden windows otherwise stop painting, and screenshots show an old frame.
@@ -121,6 +131,9 @@ export async function runSmokeTest(dir: string): Promise<void> {
     await main.webContents.executeJavaScript('document.querySelector(".content").scrollTo(0, 1e6)')
     await delay(300)
     screenshots['settings-bottom'] = await screenshot(main, dir, 'settings-bottom')
+    Object.assign(screenshots, await smokeLayout(main, dir))
+    Object.assign(screenshots, await smokeOwnEvents(main, dir, report))
+    Object.assign(screenshots, await smokeChanges(main, mini, dir, report))
     Object.assign(screenshots, await smokeNotes(main, mini, dir, report))
     report['screenshots'] = screenshots
 
@@ -134,6 +147,86 @@ export async function runSmokeTest(dir: string): Promise<void> {
     report['error'] = error instanceof Error ? error.stack : String(error)
     finish(1)
   }
+}
+
+/** Own appointments next to the TISS ones: a weekly study group and a single study block today. */
+function addSampleOwnEvents(): void {
+  const at = (days: number, hour: number): Date => {
+    const date = new Date()
+    date.setDate(date.getDate() + days)
+    date.setHours(hour, 0, 0, 0)
+    return date
+  }
+  const until = at(42, 0)
+  const day = `${until.getFullYear()}-${String(until.getMonth() + 1).padStart(2, '0')}-${String(until.getDate()).padStart(2, '0')}`
+  addOwnEvent({ title: 'Lerngruppe', start: at(1, 16).toISOString(), end: at(1, 18).toISOString(), allDay: false, location: 'Bibliothek', courseKey: '234.567', repeatWeeklyUntil: day })
+  addOwnEvent({ title: 'Lernblock', start: at(0, 19).toISOString(), end: at(0, 21).toISOString(), allDay: false, location: null, courseKey: null, repeatWeeklyUntil: null })
+  calendarChanged()
+}
+
+/** Drags a resize handle like a mouse would. */
+async function drag(win: BrowserWindow, selector: string, index: number, dx: number): Promise<void> {
+  const box = (await win.webContents.executeJavaScript(`(() => {
+    const el = document.querySelectorAll(${JSON.stringify(selector)})[${index}]
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }
+  })()`)) as { x: number; y: number } | null
+  if (!box) return
+  win.webContents.sendInputEvent({ type: 'mouseDown', x: box.x, y: box.y, button: 'left', clickCount: 1 })
+  for (let step = 1; step <= 5; step++) win.webContents.sendInputEvent({ type: 'mouseMove', x: box.x + (dx * step) / 5, y: box.y, button: 'left' })
+  win.webContents.sendInputEvent({ type: 'mouseUp', x: box.x + dx, y: box.y, button: 'left', clickCount: 1 })
+  await delay(300)
+}
+
+/** The main sidebar collapsed, then back. */
+async function smokeLayout(main: BrowserWindow, dir: string): Promise<Record<string, string>> {
+  const shots: Record<string, string> = {}
+  main.webContents.send(IPC.navigate, 'today')
+  await delay(400)
+  await main.webContents.executeJavaScript(`document.querySelector('.collapse-toggle')?.click()`)
+  await delay(1200)
+  shots['sidebar-collapsed'] = await screenshot(main, dir, 'sidebar-collapsed')
+  await main.webContents.executeJavaScript(`document.querySelector('.collapse-toggle')?.click()`)
+  await delay(400)
+  return shots
+}
+
+/** Own appointments in the calendar, their details and the form. */
+async function smokeOwnEvents(main: BrowserWindow, dir: string, report: Record<string, unknown>): Promise<Record<string, string>> {
+  const shots: Record<string, string> = {}
+  const js = (code: string): Promise<unknown> => main.webContents.executeJavaScript(code)
+  const own = calendarData().events.filter((event) => event.kind === 'own')
+  report['ownEvents'] = { definitions: calendarData().own.length, occurrences: own.length }
+  main.webContents.send(IPC.navigate, 'calendar')
+  await delay(600)
+  await js(`document.querySelector('.fc-timeGridWeek-button')?.click()`)
+  await delay(400)
+  await js(`document.querySelector('.fc-timegrid-event.kind-own')?.click()`)
+  await delay(1500)
+  shots['calendar-own'] = await screenshot(main, dir, 'calendar-own')
+  await js(`[...document.querySelectorAll('.event-details .button')].find((b) => b.textContent.includes('Bearbeiten'))?.click()`)
+  await delay(1500)
+  shots['own-dialog'] = await screenshot(main, dir, 'own-dialog')
+  await js(`document.querySelector('.modal-head .icon-button')?.click()`)
+  await delay(300)
+  return shots
+}
+
+/** A second sync with changed data: the changes show up on "Heute" (and as notifications). */
+async function smokeChanges(main: BrowserWindow, mini: BrowserWindow, dir: string, report: Record<string, unknown>): Promise<Record<string, string>> {
+  const shots: Record<string, string> = {}
+  const tiss = process.env['SOUT_SMOKE_SECOND_TISS']
+  const tuwel = process.env['SOUT_SMOKE_SECOND_TUWEL']
+  if (tiss) process.env['SOUT_TISS_FILE'] = tiss
+  if (tuwel) process.env['SOUT_TUWEL_FILE'] = tuwel
+  if (tiss || tuwel) await Promise.all([syncCalendar(), syncTasks()])
+  report['changes'] = changes().map((change) => `${change.kind}: ${change.title} – ${change.detail}`)
+  main.webContents.send(IPC.navigate, 'today')
+  await delay(1500)
+  shots['today-news'] = await screenshot(main, dir, 'today-news')
+  shots['mini-plan'] = await screenshot(mini, dir, 'mini-plan')
+  return shots
 }
 
 const SAMPLE_NOTE = `# Vorlesung
@@ -195,6 +288,9 @@ async function smokeNotes(main: BrowserWindow, mini: BrowserWindow, dir: string,
   writeFileSync(pdfSource, await samplePdf())
   const [pdfPath] = await importPdfs(lecture?.courseKey ?? null, [pdfSource], null)
   const task = tasksData().tasks[0]
+  const quick = quickNote('Frage an die Tutorin: Beispiel 3 #frage')
+  // Without calendar data (installed package) the quick note in the Inbox is the note to open.
+  const openPath = lecturePath ?? quick
   const status = async (url: string): Promise<number | string> => {
     try {
       return (await net.fetch(url)).status
@@ -207,7 +303,7 @@ async function smokeNotes(main: BrowserWindow, mini: BrowserWindow, dir: string,
     files: readdirSync(setup.root!, { recursive: true }).map(String).sort(),
     lecturePath,
     pdfPath,
-    quickNote: quickNote('Frage an die Tutorin: Beispiel 3 #frage'),
+    quickNote: quick,
     taskNote: task ? noteForTask(task.id) : null,
     search: searchNotes('pythagoras'),
     tagSearch: searchNotes('#prüfung'),
@@ -218,7 +314,7 @@ async function smokeNotes(main: BrowserWindow, mini: BrowserWindow, dir: string,
     }
   }
 
-  if (lecturePath) main.webContents.send(IPC.navigate, 'notes', lecturePath)
+  main.webContents.send(IPC.navigate, 'notes', openPath)
   await delay(2000)
   shots['notes'] = await screenshot(main, dir, 'notes')
   await clickButton('.segmented button', 'Lesen')
@@ -228,6 +324,12 @@ async function smokeNotes(main: BrowserWindow, mini: BrowserWindow, dir: string,
   if (pdfPath) await setValue('.slides-select select', pdfPath)
   await delay(3000)
   shots['notes-pdf'] = await screenshot(main, dir, 'notes-pdf')
+  // Narrower list, wider PDF: drag the dividers.
+  await drag(main, '.notes .resize-handle', 0, -60)
+  await drag(main, '.note-panes .resize-handle', 0, -200)
+  await delay(1500)
+  shots['notes-resized'] = await screenshot(main, dir, 'notes-resized')
+  report['notesLayout'] = await js(`({ tree: document.querySelector('.notes-sidebar')?.getBoundingClientRect().width, pdf: document.querySelector('.pdf-pane')?.getBoundingClientRect().width, editor: document.querySelector('.note-panes .pane')?.getBoundingClientRect().width })`)
   await setValue('.search-field input', 'pythagoras')
   await delay(1500)
   shots['notes-search'] = await screenshot(main, dir, 'notes-search')
@@ -243,7 +345,7 @@ async function smokeNotes(main: BrowserWindow, mini: BrowserWindow, dir: string,
   await js(`[...document.querySelectorAll('.task-body')].find((b) => b.getAttribute('aria-expanded') !== 'true')?.click()`)
   await delay(1500)
   shots['deadlines-note'] = await screenshot(main, dir, 'deadlines-note')
-  if (lecturePath) (report['notes'] as Record<string, unknown>)['editing'] = await smokeEditing(main, join(setup.root!, lecturePath), lecturePath)
+  ;(report['notes'] as Record<string, unknown>)['editing'] = await smokeEditing(main, join(setup.root!, openPath), openPath)
   return shots
 }
 
@@ -328,6 +430,8 @@ const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
  * processes on one profile block each other), but the encrypted tokens from the real one.
  */
 function useOwnProfile(): { realUserData: string; done: () => void } {
+  // A hidden login window closing would otherwise end the app before the tool is done.
+  app.on('window-all-closed', () => {})
   const realUserData = app.getPath('userData')
   // Chromium may still write into the folder while exiting; clean up leftovers of earlier runs.
   for (const entry of readdirSync(app.getPath('temp'))) {
@@ -402,6 +506,37 @@ export async function probeTuwel(): Promise<void> {
   console.log(`[probe] ${new Date().toISOString()} ${result} – Schlüssel-Alter: ${age ?? '?'} min`)
   profile.done()
   app.exit(0)
+}
+
+/** `--dump-grades=<file>` (development only): fresh token via a copy of the stored login, then the grades. Prints only their shape. */
+export function gradesDumpFile(argv: string[]): string | null {
+  const arg = argv.find((value) => value.startsWith('--dump-grades='))
+  return arg && !app.isPackaged ? arg.slice('--dump-grades='.length) : null
+}
+
+export async function dumpGrades(file: string): Promise<void> {
+  const profile = useOwnProfile()
+  cpSync(join(profile.realUserData, 'Partitions', 'tuwel'), join(app.getPath('userData'), 'Partitions', 'tuwel'), { recursive: true })
+  await app.whenReady()
+  let code = 0
+  try {
+    const token = await trySilent('session')
+    const site = await tuwelCall<{ userid: number }>(token, 'core_webservice_get_site_info')
+    const courses = await tuwelCall<{ id: number; enddate?: number }[]>(token, 'core_enrol_get_users_courses', { userid: site.userid })
+    console.log(`[grades] ${courses.length} courses, fields: ${Object.keys(courses[0] ?? {}).join(', ')}`)
+    const first = courses[0] ? await tuwelCall<Record<string, unknown>>(token, 'gradereport_user_get_grade_items', { courseid: courses[0].id, userid: site.userid }) : null
+    const items = ((first?.['usergrades'] as { gradeitems?: Record<string, unknown>[] }[] | undefined)?.[0]?.gradeitems ?? [])
+    console.log(`[grades] first course: ${items.length} items, fields: ${Object.keys(items[0] ?? {}).join(', ')}`)
+    const grades = await fetchGrades(token, site.userid)
+    console.log(`[grades] graded items in current courses: ${grades.length}`)
+    writeFileSync(file, `${JSON.stringify(grades, null, 2)}\n`)
+  } catch (error) {
+    console.log(`[grades] failed: ${error instanceof Error ? error.message : String(error)}`)
+    code = 1
+  } finally {
+    profile.done()
+    app.exit(code)
+  }
 }
 
 /** `--try-renewal[=session|sso]` (development only): one silent token attempt with a copy of the stored login. */

@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { CalendarDays, Check, ClipboardList, Maximize2, NotebookPen, Settings } from 'lucide-react'
-import { EventList } from './EventList'
+import { DayPlan } from './DayPlan'
 import { TaskList } from './TaskList'
 import { nextUp, useTasks } from './lib/tasks'
-import { upcoming, useCalendar } from './lib/calendar'
+import { useCalendar } from './lib/calendar'
 import { formatShortDate } from './lib/dates'
 import { useAppState, useNow } from './lib/hooks'
 
@@ -13,7 +13,6 @@ export default function Mini() {
   const { state } = useAppState()
   const tissConnected = state?.secrets.tissToken ?? false
   const calendar = useCalendar()
-  const next = calendar ? upcoming(calendar, now, 4) : []
   const tasks = useTasks()
   const due = tasks ? nextUp(tasks, now, 3) : []
 
@@ -31,15 +30,11 @@ export default function Mini() {
 
       <section className="mini-section mini-grow">
         <h3>
-          <CalendarDays size={13} /> Termine
+          <CalendarDays size={13} /> Tagesplan
         </h3>
-        {calendar && next.length > 0 ? (
-          <EventList data={calendar} events={next} now={now} compact />
-        ) : tissConnected ? (
-          <p className="mini-empty">Keine kommenden Termine.</p>
-        ) : (
+        <DayPlan calendar={calendar} tasks={tasks} now={now} />
+        {!tissConnected && (
           <p className="mini-empty">
-            Noch keine Termine.{' '}
             <button type="button" className="link" onClick={() => window.sout.openMain('settings')}>
               TISS verbinden
             </button>

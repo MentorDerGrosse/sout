@@ -1,6 +1,6 @@
 import { MapPin } from 'lucide-react'
 import type { CalendarData, CalendarEvent } from '../../shared/types'
-import { countdown, courseMap, eventLabel, formatTime, HOLIDAY_COLOR, relativeDay, roomName } from './lib/calendar'
+import { countdown, courseMap, eventColor, eventLabel, formatTime, relativeDay, roomName } from './lib/calendar'
 
 /** Upcoming appointments grouped by day ("Heute", "Morgen", …), used on "Heute" and in the mini window. */
 export function EventList(props: { data: CalendarData; events: CalendarEvent[]; now: Date; compact?: boolean }) {
@@ -21,7 +21,7 @@ export function EventList(props: { data: CalendarData; events: CalendarEvent[]; 
             const soon = index === 0 && day === 'Heute' ? countdown(event, props.now) : null
             return (
               <div key={event.id} className="event-row" title={event.title}>
-                <span className="event-bar" style={{ background: course?.color ?? HOLIDAY_COLOR }} />
+                <span className="event-bar" style={{ background: eventColor(event, course) }} />
                 <span className="event-time">
                   {formatTime(event.start)}
                   {!props.compact && <span className="event-time-end">–{formatTime(event.end)}</span>}

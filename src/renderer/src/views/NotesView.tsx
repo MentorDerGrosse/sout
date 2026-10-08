@@ -23,7 +23,7 @@ import {
 } from 'lucide-react'
 import { INBOX } from '../../../shared/notes'
 import type { CalendarData, Course, NoteDoc, NotesData, SearchHit, View } from '../../../shared/types'
-import { Callout } from '../components'
+import { Callout, ResizeHandle } from '../components'
 import { courseMap, eventLabel, useCalendar } from '../lib/calendar'
 import {
   courseDirOf,
@@ -41,6 +41,8 @@ import {
   type NoteFileNode
 } from '../lib/notes'
 import { useNow } from '../lib/hooks'
+import { MOD, modKey } from '../lib/platform'
+import { clamp, remember, remembered, useRemembered } from '../lib/storage'
 import { focusFirstSection, goToLine, insertMathBlock, MarkdownEditor, toggleChecklist, toggleHeading, toggleTask, wrap } from '../notes/Editor'
 import { NewNoteDialog, type NewNoteDefaults } from '../notes/NewNoteDialog'
 import { NoteTree } from '../notes/NoteTree'
@@ -64,24 +66,15 @@ const MODES: { mode: Mode; label: string; icon: typeof Eye }[] = [
   { mode: 'preview', label: 'Lesen', icon: Eye }
 ]
 
-/** Small things remembered between starts: last note, view mode, open folders. */
-const remembered = {
-  get<T>(key: string, fallback: T): T {
-    try {
-      const value = localStorage.getItem(`sout.notes.${key}`)
-      return value === null ? fallback : (JSON.parse(value) as T)
-    } catch {
-      return fallback
-    }
-  },
-  set(key: string, value: unknown): void {
-    try {
-      localStorage.setItem(`sout.notes.${key}`, JSON.stringify(value))
-    } catch {
-      // Not important enough to bother anyone.
-    }
-  }
+/** Small things remembered between starts: last note, view mode, open folders, widths. */
+const prefs = {
+  get: <T,>(key: string, fallback: T): T => remembered(`sout.notes.${key}`, fallback),
+  set: (key: string, value: unknown): void => remember(`sout.notes.${key}`, value)
 }
+
+const TREE = { default: 264, min: 180, max: 480 }
+/** Smallest width of a pane next to another one. */
+const MIN_PANE = 240
 
 export default function NotesView(props: { request: NoteRequest | null; active: boolean; onNavigate: (view: View) => void }) {
   const { notes, reload } = useNotes()
@@ -183,15 +176,21 @@ function Workspace(props: { notes: NotesData; calendar: CalendarData | null; req
   const viewRef = useRef<EditorView | null>(null)
   const previewRef = useRef<HTMLDivElement | null>(null)
   const searchRef = useRef<HTMLInputElement | null>(null)
+  const notesRef = useRef<HTMLDivElement | null>(null)
+  const panesRef = useRef<HTMLDivElement | null>(null)
+  // Widths: the list in px, two panes side by side as share of the space (one for preview, one for slides).
+  const [treeWidth, setTreeWidth] = useRemembered('sout.notes.treeWidth', TREE.default)
+  const [splitPreview, setSplitPreview] = useRemembered('sout.notes.splitPreview', 0.5)
+  const [splitPdf, setSplitPdf] = useRemembered('sout.notes.splitPdf', 0.5)
 
   const [doc, setDoc] = useState<OpenNote | null>(null)
   const [content, setContent] = useState('')
   const [saveState, setSaveState] = useState<SaveState>('saved')
   const [problem, setProblem] = useState<string | null>(null)
   const [pdf, setPdf] = useState<string | null>(null)
-  const [mode, setMode] = useState<Mode>(() => remembered.get('mode', 'split'))
-  const [treeHidden, setTreeHidden] = useState(() => remembered.get('treeHidden', false))
-  const [expanded, setExpanded] = useState(() => new Set(remembered.get<string[]>('expanded', [])))
+  const [mode, setMode] = useState<Mode>(() => prefs.get('mode', 'split'))
+  const [treeHidden, setTreeHidden] = useState(() => prefs.get('treeHidden', false))
+  const [expanded, setExpanded] = useState(() => new Set(prefs.get<string[]>('expanded', [])))
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<SearchHit[] | null>(null)
   const [newNote, setNewNote] = useState<NewNoteDefaults | null>(null)
@@ -209,9 +208,9 @@ function Workspace(props: { notes: NotesData; calendar: CalendarData | null; req
   const timer = useRef<number | undefined>(undefined)
   const afterOpen = useRef<((view: EditorView) => void) | null>(null)
 
-  useEffect(() => remembered.set('mode', mode), [mode])
-  useEffect(() => remembered.set('treeHidden', treeHidden), [treeHidden])
-  useEffect(() => remembered.set('expanded', [...expanded]), [expanded])
+  useEffect(() => prefs.set('mode', mode), [mode])
+  useEffect(() => prefs.set('treeHidden', treeHidden), [treeHidden])
+  useEffect(() => prefs.set('expanded', [...expanded]), [expanded])
 
   const expandTo = useCallback((path: string) => {
     setExpanded((previous) => {
@@ -274,7 +273,7 @@ function Workspace(props: { notes: NotesData; calendar: CalendarData | null; req
       setProblem(null)
       setRenaming(false)
       setConfirmDelete(false)
-      remembered.set('open', loaded.path)
+      prefs.set('open', loaded.path)
       expandTo(loaded.path)
     },
     [expandTo]
@@ -302,7 +301,7 @@ function Workspace(props: { notes: NotesData; calendar: CalendarData | null; req
     setDoc(null)
     setContent('')
     setSaveState('saved')
-    remembered.set('open', null)
+    prefs.set('open', null)
   }, [])
 
   const openPdf = useCallback(
@@ -329,7 +328,7 @@ function Workspace(props: { notes: NotesData; calendar: CalendarData | null; req
       void openNote(props.request.path, props.request.fresh ? focusFirstSection : undefined)
     } else if (handled.current === null) {
       handled.current = -1
-      const last = remembered.get<string | null>('open', null)
+      const last = prefs.get<string | null>('open', null)
       if (last && findNode(notes.tree, last)) void openNote(last)
     }
   }, [props.request, openNote, notes.tree])
@@ -388,11 +387,11 @@ function Workspace(props: { notes: NotesData; calendar: CalendarData | null; req
     })
   }, [lecture, courseKey])
 
-  // Strg+N: new note, Strg+Umschalt+F: search all notes.
+  // Strg+N (Cmd+N on a Mac): new note, Strg+Umschalt+F: search all notes.
   useEffect(() => {
     if (!props.active) return
     const onKey = (event: KeyboardEvent): void => {
-      if (!event.ctrlKey || event.altKey) return
+      if (!modKey(event) || event.altKey) return
       const key = event.key.toLowerCase()
       if (key === 'n' && !event.shiftKey) {
         event.preventDefault()
@@ -433,7 +432,7 @@ function Workspace(props: { notes: NotesData; calendar: CalendarData | null; req
     }
     note.path = result.value
     setDoc({ ...doc, path: result.value })
-    remembered.set('open', result.value)
+    prefs.set('open', result.value)
     expandTo(result.value)
   }
 
@@ -448,7 +447,7 @@ function Workspace(props: { notes: NotesData; calendar: CalendarData | null; req
     }
     note.path = result.value
     setDoc({ ...doc, path: result.value })
-    remembered.set('open', result.value)
+    prefs.set('open', result.value)
     expandTo(result.value)
   }
 
@@ -499,11 +498,33 @@ function Workspace(props: { notes: NotesData; calendar: CalendarData | null; req
   const showEditor = doc !== null && mode !== 'preview'
   const showPreview = doc !== null && (mode === 'preview' || (mode === 'split' && !pdf))
   const panes = Number(showEditor) + Number(showPreview) + Number(pdf !== null)
+  // Two panes side by side: the left one gets its share, the right one the rest.
+  const split = pdf ? splitPdf : splitPreview
+  const setSplit = pdf ? setSplitPdf : setSplitPreview
+  const leftPane = panes === 2 ? { flex: `0 0 ${(split * 100).toFixed(2)}%` } : undefined
+  const resizeSplit = (clientX: number): void => {
+    const box = panesRef.current?.getBoundingClientRect()
+    if (!box || box.width === 0) return
+    const min = Math.min(MIN_PANE / box.width, 0.45)
+    setSplit(clamp((clientX - box.left) / box.width, min, 1 - min))
+  }
+  const splitHandle = (
+    <ResizeHandle
+      label={pdf ? 'Breite von Notiz und Folien' : 'Breite von Notiz und Vorschau'}
+      onDrag={resizeSplit}
+      onStep={(delta) => {
+        const box = panesRef.current?.getBoundingClientRect()
+        if (box) resizeSplit(box.left + split * box.width + delta)
+      }}
+      onReset={() => setSplit(0.5)}
+    />
+  )
   const dropTarget = courseKey ? `Folien von ${courseLabel(courseDirOf(doc!.path)!.split('/').pop()!, courses)}` : 'die Inbox'
 
   return (
     <div
-      className={`notes${treeHidden ? ' tree-hidden' : ''}`}
+      ref={notesRef}
+      className="notes"
       onDragOver={(event) => {
         if (event.dataTransfer.types.includes('Files')) {
           event.preventDefault()
@@ -512,7 +533,7 @@ function Workspace(props: { notes: NotesData; calendar: CalendarData | null; req
       }}
     >
       {!treeHidden && (
-        <aside className="notes-sidebar">
+        <aside className="notes-sidebar" style={{ width: treeWidth }}>
           <div className="notes-sidebar-head">
             <label className="search-field">
               <Search size={14} />
@@ -533,7 +554,7 @@ function Workspace(props: { notes: NotesData; calendar: CalendarData | null; req
                 </button>
               )}
             </label>
-            <button type="button" className="icon-button" title="Neue Notiz (Strg+N)" aria-label="Neue Notiz" onClick={startNewNote}>
+            <button type="button" className="icon-button" title={`Neue Notiz (${MOD}+N)`} aria-label="Neue Notiz" onClick={startNewNote}>
               <Plus size={17} />
             </button>
           </div>
@@ -582,6 +603,14 @@ function Workspace(props: { notes: NotesData; calendar: CalendarData | null; req
             )}
           </div>
         </aside>
+      )}
+      {!treeHidden && (
+        <ResizeHandle
+          label="Breite der Notizliste"
+          onDrag={(clientX) => setTreeWidth(clamp(clientX - (notesRef.current?.getBoundingClientRect().left ?? 0), TREE.min, TREE.max))}
+          onStep={(delta) => setTreeWidth((width) => clamp(width + delta, TREE.min, TREE.max))}
+          onReset={() => setTreeWidth(TREE.default)}
+        />
       )}
 
       <section className="notes-main">
@@ -637,12 +666,12 @@ function Workspace(props: { notes: NotesData; calendar: CalendarData | null; req
           <div className="note-toolbar">
             <div className="format-buttons" aria-label="Formatieren">
               <FormatButton label="Überschrift" icon={Heading2} disabled={!showEditor} run={toggleHeading} view={viewRef} />
-              <FormatButton label="Fett (Strg+B)" icon={Bold} disabled={!showEditor} run={(view) => wrap(view, '**')} view={viewRef} />
-              <FormatButton label="Kursiv (Strg+I)" icon={Italic} disabled={!showEditor} run={(view) => wrap(view, '*')} view={viewRef} />
-              <FormatButton label="Formel (Strg+M)" icon={Sigma} disabled={!showEditor} run={(view) => wrap(view, '$')} view={viewRef} />
-              <FormatButton label="Formel als eigener Block (Strg+Umschalt+M)" icon={SquareSigma} disabled={!showEditor} run={insertMathBlock} view={viewRef} />
-              <FormatButton label="Checkliste (Strg+Umschalt+L)" icon={ListChecks} disabled={!showEditor} run={toggleChecklist} view={viewRef} />
-              <FormatButton label="Code (Strg+E)" icon={Code} disabled={!showEditor} run={(view) => wrap(view, '`')} view={viewRef} />
+              <FormatButton label={`Fett (${MOD}+B)`} icon={Bold} disabled={!showEditor} run={(view) => wrap(view, '**')} view={viewRef} />
+              <FormatButton label={`Kursiv (${MOD}+I)`} icon={Italic} disabled={!showEditor} run={(view) => wrap(view, '*')} view={viewRef} />
+              <FormatButton label={`Formel (${MOD}+M)`} icon={Sigma} disabled={!showEditor} run={(view) => wrap(view, '$')} view={viewRef} />
+              <FormatButton label={`Formel als eigener Block (${MOD}+Umschalt+M)`} icon={SquareSigma} disabled={!showEditor} run={insertMathBlock} view={viewRef} />
+              <FormatButton label={`Checkliste (${MOD}+Umschalt+L)`} icon={ListChecks} disabled={!showEditor} run={toggleChecklist} view={viewRef} />
+              <FormatButton label={`Code (${MOD}+E)`} icon={Code} disabled={!showEditor} run={(view) => wrap(view, '`')} view={viewRef} />
             </div>
             <div className="toolbar-right">
               <label className="slides-select" title="Folien neben der Notiz anzeigen">
@@ -700,9 +729,9 @@ function Workspace(props: { notes: NotesData; calendar: CalendarData | null; req
           </Callout>
         )}
 
-        <div className={`note-panes panes-${Math.max(panes, 1)}`}>
+        <div ref={panesRef} className="note-panes">
           {doc && (
-            <div className="pane" hidden={!showEditor}>
+            <div className="pane" hidden={!showEditor} style={showEditor ? leftPane : undefined}>
               <MarkdownEditor
                 docKey={doc.key}
                 content={content}
@@ -716,8 +745,9 @@ function Workspace(props: { notes: NotesData; calendar: CalendarData | null; req
               />
             </div>
           )}
+          {showEditor && panes === 2 && splitHandle}
           {doc && showPreview && (
-            <div className="pane">
+            <div className="pane" style={showEditor ? undefined : leftPane}>
               <Preview
                 content={content}
                 dir={dirOf(doc.path)}
@@ -729,6 +759,7 @@ function Workspace(props: { notes: NotesData; calendar: CalendarData | null; req
               />
             </div>
           )}
+          {showPreview && !showEditor && panes === 2 && splitHandle}
           {pdf && (
             <div className="pane pdf-pane">
               <div className="pdf-head">

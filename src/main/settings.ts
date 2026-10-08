@@ -8,7 +8,10 @@ const DEFAULTS: Settings = {
   closeHintShown: false,
   reminders: [1440, 180],
   notifyOpening: true,
-  notesDir: ''
+  notesDir: '',
+  notifyChanges: true,
+  notifyNewTasks: true,
+  notifyGrades: true
 }
 
 let current: Settings | null = null

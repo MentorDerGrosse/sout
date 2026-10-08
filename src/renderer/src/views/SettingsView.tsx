@@ -4,6 +4,7 @@ import { REMINDER_CHOICES, type AppInfo, type Course, type SecretsStatus, type S
 import { Callout, Command, Toggle } from '../components'
 import { syncStatus, useCalendar } from '../lib/calendar'
 import { useAppState } from '../lib/hooks'
+import { keyStore, trayPlace } from '../lib/platform'
 import { useNotes } from '../lib/notes'
 import { useTasks } from '../lib/tasks'
 
@@ -50,24 +51,26 @@ export default function SettingsView() {
             />
           </div>
           <div className="row">
-            <TrayStatus available={info.trayAvailable} />
+            <TrayStatus available={info.trayAvailable} platform={info.platform} />
           </div>
-          <div className="row">
-            <div className="row-text">
-              <div className="row-title">Tastenkürzel für die Mini-Ansicht</div>
-              {info.launcher ? (
-                <div className="row-desc">
-                  GNOME-Einstellungen → Tastatur → eigene Tastenkombination hinzufügen, als Befehl:{' '}
-                  <Command text={`${info.launcher} --mini`} />
-                </div>
-              ) : (
-                <div className="row-desc">
-                  Zuerst im Projektordner <code>npm run build</code> und <code>npm run install-desktop</code> ausführen.
-                  Danach steht hier der Befehl für die GNOME-Tastenkombination.
-                </div>
-              )}
+          {info.platform === 'linux' && (
+            <div className="row">
+              <div className="row-text">
+                <div className="row-title">Tastenkürzel für die Mini-Ansicht</div>
+                {info.launcher ? (
+                  <div className="row-desc">
+                    GNOME-Einstellungen → Tastatur → eigene Tastenkombination hinzufügen, als Befehl:{' '}
+                    <Command text={`${info.launcher} --mini`} />
+                  </div>
+                ) : (
+                  <div className="row-desc">
+                    Zuerst im Projektordner <code>npm run build</code> und <code>npm run install-desktop</code> ausführen.
+                    Danach steht hier der Befehl für die GNOME-Tastenkombination.
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
         {autostartError && (
           <Callout kind="error" title="Autostart konnte nicht geändert werden.">
@@ -82,7 +85,7 @@ export default function SettingsView() {
           <TissRow connected={secrets.tissToken} onChanged={reload} />
           <TuwelRow />
           <div className="row">
-            <KeyringStatus secrets={secrets} />
+            <KeyringStatus secrets={secrets} platform={info.platform} />
           </div>
         </div>
       </section>
@@ -105,10 +108,10 @@ export default function SettingsView() {
   )
 }
 
-function TrayStatus({ available }: { available: boolean | null }) {
-  if (available) {
+function TrayStatus({ available, platform }: { available: boolean | null; platform: string }) {
+  if (available || platform !== 'linux') {
     return (
-      <Callout kind="ok" title="Das Symbol oben in der Leiste wird angezeigt.">
+      <Callout kind="ok" title={`Das Symbol ${trayPlace(platform)} wird angezeigt.`}>
         Schließen versteckt sout nur. Ein Klick aufs Symbol öffnet die Mini-Ansicht, Rechtsklick das Menü.
       </Callout>
     )
@@ -222,10 +225,10 @@ function TissRow({ connected, onChanged }: { connected: boolean; onChanged: () =
   )
 }
 
-function KeyringStatus({ secrets }: { secrets: SecretsStatus }) {
+function KeyringStatus({ secrets, platform }: { secrets: SecretsStatus; platform: string }) {
   return secrets.secure ? (
     <Callout kind="info" title="Zugänge werden verschlüsselt gespeichert.">
-      Der Schlüssel liegt im GNOME-Schlüsselbund, auf der Platte steht nur verschlüsselter Text.
+      Der Schlüssel liegt {keyStore(platform)}, auf der Platte steht nur verschlüsselter Text.
     </Callout>
   ) : (
     <Callout kind="warn" title="Kein Schlüsselbund gefunden.">
@@ -242,18 +245,26 @@ function InfoList({ info }: { info: AppInfo }) {
       <dd>
         {info.version} (Electron {info.electronVersion})
       </dd>
-      <dt>Fenster</dt>
-      <dd>
-        {windowSystem} · Sitzung: {info.sessionType || '?'} · {info.desktop || '?'}
-      </dd>
+      {info.platform === 'linux' && (
+        <>
+          <dt>Fenster</dt>
+          <dd>
+            {windowSystem} · Sitzung: {info.sessionType || '?'} · {info.desktop || '?'}
+          </dd>
+        </>
+      )}
       <dt>Daten</dt>
       <dd>
         <code>{info.userDataDir}</code>
       </dd>
-      <dt>Autostart-Datei</dt>
-      <dd>
-        <code>{info.autostartFile}</code>
-      </dd>
+      {info.autostartFile && (
+        <>
+          <dt>Autostart-Datei</dt>
+          <dd>
+            <code>{info.autostartFile}</code>
+          </dd>
+        </>
+      )}
     </dl>
   )
 }
@@ -373,7 +384,7 @@ function RemindersSection({ settings }: { settings: Settings }) {
   }
   return (
     <section className="section">
-      <h2>Erinnerungen</h2>
+      <h2>Erinnerungen & Meldungen</h2>
       <div className="rows">
         <div className="row column">
           <div className="row-text">
@@ -403,6 +414,27 @@ function RemindersSection({ settings }: { settings: Settings }) {
             checked={settings.notifyOpening}
             onChange={(value) => void window.sout.updateSettings({ notifyOpening: value })}
           />
+        </div>
+        <div className="row">
+          <div className="row-text">
+            <div className="row-title">Änderungen im Stundenplan melden</div>
+            <div className="row-desc">Raumwechsel, verschobene oder entfallene Termine der nächsten zwei Wochen, neue Prüfungstermine.</div>
+          </div>
+          <Toggle label="Änderungen im Stundenplan melden" checked={settings.notifyChanges} onChange={(value) => void window.sout.updateSettings({ notifyChanges: value })} />
+        </div>
+        <div className="row">
+          <div className="row-text">
+            <div className="row-title">Neue Aufgaben in TUWEL melden</div>
+            <div className="row-desc">Sobald eine neue Abgabe oder ein neuer Test in TUWEL auftaucht.</div>
+          </div>
+          <Toggle label="Neue Aufgaben in TUWEL melden" checked={settings.notifyNewTasks} onChange={(value) => void window.sout.updateSettings({ notifyNewTasks: value })} />
+        </div>
+        <div className="row">
+          <div className="row-text">
+            <div className="row-title">Neue Bewertungen melden</div>
+            <div className="row-desc">sout schaut alle zwei Stunden in TUWEL nach neuen Noten und Punkten.</div>
+          </div>
+          <Toggle label="Neue Bewertungen melden" checked={settings.notifyGrades} onChange={(value) => void window.sout.updateSettings({ notifyGrades: value })} />
         </div>
       </div>
     </section>
