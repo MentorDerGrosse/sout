@@ -1,9 +1,11 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { IPC, isView, type AppInfo, type CoursePatch, type NewNote, type Result, type TodoInput } from '../shared/types'
 import { autostartFile, isAutostartEnabled, setAutostart } from './autostart'
-import { calendarData, clearCalendar, syncCalendar, updateCourse } from './calendar'
+import { calendarChanged, calendarData, clearCalendar, syncCalendar, updateCourse } from './calendar'
+import { changes, dismissChange } from './changes'
 import { chooseNotesDir, createNote, importPdfs, moveNote, noteForEvent, noteForTask, quickNote, setupNotes } from './courseNotes'
 import { flushNote, notesData, readNote, renameNote, searchNotes, showInFolder, trashNote, writeNote } from './notes'
+import { addOwnEvent, deleteOwnEvent, updateOwnEvent } from './ownEvents'
 import { launcherPath } from './paths'
 import { clearSecret, getSecret, secretsStatus, setSecret } from './secrets'
 import { getSettings, updateSettings } from './settings'
@@ -41,6 +43,8 @@ async function appInfo(): Promise<AppInfo> {
   return {
     version: app.getVersion(),
     electronVersion: process.versions.electron,
+    platform: process.platform,
+    packaged: app.isPackaged,
     windowSystem: windowSystem(),
     sessionType: process.env['XDG_SESSION_TYPE'] ?? '',
     desktop: process.env['XDG_CURRENT_DESKTOP'] ?? '',
@@ -112,6 +116,21 @@ export function registerIpc(): void {
   ipcMain.handle(IPC.updateCourse, (_event, key: unknown, patch: unknown) => {
     if (typeof key === 'string' && patch && typeof patch === 'object') updateCourse(key, patch as CoursePatch)
     return calendarData()
+  })
+  // Own appointments: change, then hand back the calendar with them.
+  const ownChange = (change: () => void): Promise<Result<ReturnType<typeof calendarData>>> =>
+    attempt(() => {
+      change()
+      calendarChanged()
+      return calendarData()
+    })
+  ipcMain.handle(IPC.addOwnEvent, (_event, input: unknown) => ownChange(() => addOwnEvent(input)))
+  ipcMain.handle(IPC.updateOwnEvent, (_event, id: unknown, input: unknown) => ownChange(() => updateOwnEvent(text(id), input)))
+  ipcMain.handle(IPC.deleteOwnEvent, (_event, id: unknown, day: unknown) => ownChange(() => deleteOwnEvent(text(id), stringOrNull(day))))
+  ipcMain.handle(IPC.getChanges, () => changes())
+  ipcMain.handle(IPC.dismissChange, (_event, id: unknown) => {
+    dismissChange(stringOrNull(id))
+    return changes()
   })
   ipcMain.handle(IPC.getTasks, () => tasksData())
   ipcMain.handle(IPC.syncTasks, async () => {

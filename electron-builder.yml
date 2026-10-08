@@ -1,0 +1,52 @@
+# Installers and packages: npm run dist (see README).
+# Linux: AppImage + RPM · Windows: installer (NSIS) · macOS: .dmg + .zip – each built on its own system.
+appId: io.github.mentordergrosse.sout # also in src/main/index.ts (APP_ID)
+productName: sout
+copyright: Copyright © 2026 MentorDerGrosse
+
+directories:
+  output: dist
+  buildResources: build
+
+# Everything the app needs is bundled into out/ by electron-vite – no node_modules in the package.
+files:
+  - out/**/*
+  - package.json
+# Icons, room list etc. next to the app (src/main/paths.ts: resourcePath).
+extraResources:
+  - from: resources
+    to: .
+
+artifactName: ${productName}-${version}-${arch}.${ext}
+publish: null
+
+linux:
+  target: [AppImage, rpm]
+  category: Education
+  executableName: sout
+  # Started from the app menu: XWayland and German straight away (otherwise sout restarts itself with them).
+  executableArgs: ['--ozone-platform=x11', '--lang=de-AT']
+  desktop:
+    entry:
+      Comment: Studium organisieren – TISS, TUWEL, Notizen
+      StartupWMClass: sout
+
+win:
+  target: [nsis]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+
+mac:
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+  # Apple Silicon and Intel Macs.
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  category: public.app-category.education
+  # Not signed (no Apple developer account): first start via right click → Öffnen.
+  identity: null

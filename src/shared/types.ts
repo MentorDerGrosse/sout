@@ -20,6 +20,12 @@ export interface Settings {
   notifyOpening: boolean
   /** Folder with the notes; empty until it has been set up in the notes view. */
   notesDir: string
+  /** Notify about changes in the TISS calendar: room, time, dropped, new exam dates. */
+  notifyChanges: boolean
+  /** Notify about new assignments and tests in TUWEL. */
+  notifyNewTasks: boolean
+  /** Look for new grades in TUWEL and notify. */
+  notifyGrades: boolean
 }
 
 /** Reminder times offered in the settings: minutes before a deadline → label. */
@@ -43,6 +49,10 @@ export interface SecretsStatus {
 export interface AppInfo {
   version: string
   electronVersion: string
+  /** 'linux', 'win32' or 'darwin' – some texts and options depend on it. */
+  platform: string
+  /** Installed package (AppImage, RPM, installer) rather than run from the project folder. */
+  packaged: boolean
   /** Display backend requested from Chromium; 'x11' means XWayland. */
   windowSystem: 'x11' | 'wayland' | 'default'
   sessionType: string
@@ -50,12 +60,13 @@ export interface AppInfo {
   /** Can tray icons be shown right now (StatusNotifierWatcher running)? null = could not check. */
   trayAvailable: boolean | null
   userDataDir: string
-  autostartFile: string
-  /** The `sout` command from `npm run install-desktop`, if installed. */
+  /** Linux: the autostart .desktop file; null where the system keeps login items (Windows, macOS). */
+  autostartFile: string | null
+  /** Command that starts sout (for a keyboard shortcut with --mini); null if there is none to offer. */
   launcher: string | null
 }
 
-export type EventKind = 'course' | 'group' | 'exam' | 'holiday' | 'other'
+export type EventKind = 'course' | 'group' | 'exam' | 'holiday' | 'other' | 'own'
 
 /** One appointment from the TISS calendar. */
 export interface CalendarEvent {
@@ -74,6 +85,27 @@ export interface CalendarEvent {
   location: string | null
   /** Overflow rooms: TISS lists a lecture once per room ("Ausweich Räumlichkeiten", "Übertragung"). */
   otherLocations: string[]
+  /** Own appointments: id of the OwnEvent this (occurrence) comes from; null for TISS. */
+  ownId: string | null
+}
+
+/** An own appointment as entered: study group, study block … */
+export interface OwnEventInput {
+  title: string
+  /** ISO date-time; for all-day events YYYY-MM-DD (end exclusive). */
+  start: string
+  end: string
+  allDay: boolean
+  location: string | null
+  courseKey: string | null
+  /** Repeats every week up to and including this day (YYYY-MM-DD); null = once. */
+  repeatWeeklyUntil: string | null
+}
+
+export interface OwnEvent extends OwnEventInput {
+  id: string
+  /** Days (YYYY-MM-DD) of a weekly series that were deleted on their own. */
+  skip: string[]
 }
 
 /** A course ("Fach"), recognised from the LVA number in the TISS titles. */
@@ -96,7 +128,10 @@ export interface RoomInfo {
 }
 
 export interface CalendarData {
+  /** TISS appointments and the occurrences of own ones, by start. */
   events: CalendarEvent[]
+  /** Own appointments as entered (for editing). */
+  own: OwnEvent[]
   courses: Course[]
   /** Known rooms by their TISS name (only those used by the events). */
   rooms: Record<string, RoomInfo>
@@ -162,6 +197,19 @@ export interface TodoInput {
 }
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string }
+
+/** Something that changed since the last sync, shown on "Heute" until dismissed. */
+export interface Change {
+  id: string
+  /** When sout noticed it (ISO). */
+  at: string
+  kind: 'room' | 'time' | 'cancelled' | 'added' | 'exam' | 'task' | 'grade'
+  title: string
+  detail: string
+  /** Where a click leads: a view of sout, or a TUWEL page. */
+  view: View | null
+  url: string | null
+}
 
 /** Files in the notes folder are served to the UI as sout-file://notes/<path> (PDF viewer, images). */
 export const NOTE_FILE_SCHEME = 'sout-file'
@@ -229,6 +277,10 @@ export interface SoutApi {
   /** Reads TISS again now. */
   syncCalendar(): Promise<CalendarData>
   updateCourse(key: string, patch: CoursePatch): Promise<CalendarData>
+  addOwnEvent(input: OwnEventInput): Promise<Result<CalendarData>>
+  updateOwnEvent(id: string, input: OwnEventInput): Promise<Result<CalendarData>>
+  /** With `day`, only that occurrence of a weekly series goes. */
+  deleteOwnEvent(id: string, day: string | null): Promise<Result<CalendarData>>
   onCalendarChanged(listener: () => void): () => void
   getTasks(): Promise<TasksData>
   syncTasks(): Promise<TasksData>
@@ -239,6 +291,10 @@ export interface SoutApi {
   setTaskDone(id: string, done: boolean): Promise<TasksData>
   deleteTodo(id: string): Promise<TasksData>
   onTasksChanged(listener: () => void): () => void
+  getChanges(): Promise<Change[]>
+  /** One change, or with null all. */
+  dismissChange(id: string | null): Promise<Change[]>
+  onChangesChanged(listener: () => void): () => void
   getNotes(): Promise<NotesData>
   /** Creates the notes folder (null: the suggested one) with Inbox and course folders. */
   setupNotes(dir: string | null): Promise<Result<NotesData>>
@@ -289,6 +345,9 @@ export const IPC = {
   getCalendar: 'sout:get-calendar',
   syncCalendar: 'sout:sync-calendar',
   updateCourse: 'sout:update-course',
+  addOwnEvent: 'sout:add-own-event',
+  updateOwnEvent: 'sout:update-own-event',
+  deleteOwnEvent: 'sout:delete-own-event',
   calendarChanged: 'sout:calendar-changed',
   getTasks: 'sout:get-tasks',
   syncTasks: 'sout:sync-tasks',
@@ -298,6 +357,9 @@ export const IPC = {
   setTaskDone: 'sout:set-task-done',
   deleteTodo: 'sout:delete-todo',
   tasksChanged: 'sout:tasks-changed',
+  getChanges: 'sout:get-changes',
+  dismissChange: 'sout:dismiss-change',
+  changesChanged: 'sout:changes-changed',
   getNotes: 'sout:get-notes',
   setupNotes: 'sout:setup-notes',
   chooseNotesDir: 'sout:choose-notes-dir',

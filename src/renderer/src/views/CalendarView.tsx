@@ -3,16 +3,19 @@ import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import listPlugin from '@fullcalendar/list'
+import interactionPlugin from '@fullcalendar/interaction'
 import deLocale from '@fullcalendar/core/locales/de'
-import type { EventContentArg, EventInput } from '@fullcalendar/core'
-import { CalendarDays, ExternalLink, MapPin, NotebookPen, RefreshCw, X } from 'lucide-react'
+import type { EventChangeArg, EventContentArg, EventInput } from '@fullcalendar/core'
+import { ExternalLink, MapPin, NotebookPen, Pencil, Plus, RefreshCw, Repeat, Trash2, X } from 'lucide-react'
 import { EVENT_NOTE_FOLDERS } from '../../../shared/notes'
-import type { CalendarData, CalendarEvent, EventKind, View } from '../../../shared/types'
+import type { CalendarData, CalendarEvent, EventKind, OwnEvent, View } from '../../../shared/types'
 import { eventNotePath, useNotes } from '../lib/notes'
 import { openTasks, taskCourse, useTasks } from '../lib/tasks'
 import { Callout } from '../components'
+import { draftOf, newDraft, OwnEventDialog, type OwnEventDraft } from '../OwnEventDialog'
 import {
   courseMap,
+  eventColor,
   eventLabel,
   formatTime,
   HOLIDAY_COLOR,
@@ -32,6 +35,7 @@ const KIND_FILTERS: { kind: Filter; label: string }[] = [
   { kind: 'course', label: 'Vorlesungen' },
   { kind: 'group', label: 'Gruppen' },
   { kind: 'exam', label: 'Prüfungen' },
+  { kind: 'own', label: 'Eigene' },
   { kind: 'deadline', label: 'Abgaben' },
   { kind: 'holiday', label: 'Ferien' }
 ]
@@ -42,44 +46,25 @@ export default function CalendarView(props: { onNavigate: (view: View) => void; 
   const tasks = useTasks()
   const [hiddenKinds, setHiddenKinds] = useState<Set<Filter>>(new Set())
   const [selected, setSelected] = useState<CalendarEvent | null>(null)
+  const [dialog, setDialog] = useState<{ draft: OwnEventDraft; editingId?: string } | null>(null)
   if (!data) return null
 
-  if (data.events.length === 0) {
-    return (
-      <div className="page">
-        <header className="page-header">
-          <h1>Kalender</h1>
-          <p>Dein Stundenplan, direkt aus TISS.</p>
-        </header>
-        <section className="card">
-          <div className="empty">
-            <CalendarDays size={22} />
-            <strong>{data.syncing ? 'Lade deinen TISS-Kalender …' : 'Noch keine Termine'}</strong>
-            {data.error ? (
-              <span>TISS konnte nicht gelesen werden: {data.error}</span>
-            ) : (
-              <span>Trag in den Einstellungen deine TISS-Kalender-URL ein, dann erscheinen hier deine LVAs, Gruppen und Prüfungen.</span>
-            )}
-            <button type="button" className="button small" onClick={() => onNavigate('settings')}>
-              Zu den Einstellungen
-            </button>
-          </div>
-        </section>
-      </div>
-    )
-  }
-
   const courses = courseMap(data)
+  const ownById = new Map(data.own.map((own) => [own.id, own]))
+  const fromTiss = data.events.some((event) => event.ownId === null)
   const events: EventInput[] = visibleEvents(data)
     .filter((event) => !hiddenKinds.has(event.kind))
     .map((event) => {
-      const color = (event.courseKey && courses.get(event.courseKey)?.color) || HOLIDAY_COLOR
+      const color = eventColor(event, event.courseKey ? courses.get(event.courseKey) : undefined)
+      // Own single appointments can be moved and resized right in the calendar; series only via the form.
+      const own = event.ownId ? ownById.get(event.ownId) : undefined
       return {
         id: event.id,
         title: eventLabel(event, event.courseKey ? courses.get(event.courseKey) : undefined),
         start: event.start,
         end: event.end,
         allDay: event.allDay,
+        editable: Boolean(own && !own.repeatWeeklyUntil),
         backgroundColor: color,
         borderColor: color,
         textColor: '#fff',
@@ -87,6 +72,26 @@ export default function CalendarView(props: { onNavigate: (view: View) => void; 
         extendedProps: { room: event.location ? roomName(event.location) : '' }
       }
     })
+
+  /** An own appointment was dragged to another time or made longer/shorter. */
+  const moveOwn = async (change: EventChangeArg): Promise<void> => {
+    const own = data.events.find((event) => event.id === change.event.id)?.ownId
+    const original = own ? ownById.get(own) : undefined
+    const start = change.event.start
+    if (!original || !start) {
+      change.revert()
+      return
+    }
+    const allDay = change.event.allDay
+    const end = change.event.end ?? new Date(start.getTime() + (allDay ? 24 * 60 : 60) * 60_000)
+    const result = await window.sout.updateOwnEvent(original.id, {
+      ...original,
+      allDay,
+      start: allDay ? isoDate(start) : start.toISOString(),
+      end: allDay ? isoDate(end) : end.toISOString()
+    })
+    if (!result.ok) change.revert()
+  }
 
   // Deadlines go into the all-day row of their day: "23:59 Mathe · Übungsblatt 2".
   if (tasks && !hiddenKinds.has('deadline')) {
@@ -126,10 +131,28 @@ export default function CalendarView(props: { onNavigate: (view: View) => void; 
             {data.error && ` · Letzte Aktualisierung fehlgeschlagen: ${data.error}`}
           </p>
         </div>
-        <button type="button" className="button secondary" disabled={data.syncing} onClick={() => void window.sout.syncCalendar()}>
-          <RefreshCw size={14} className={data.syncing ? 'spin' : undefined} /> Aktualisieren
-        </button>
+        <div className="header-actions">
+          <button type="button" className="button secondary" disabled={data.syncing} onClick={() => void window.sout.syncCalendar()}>
+            <RefreshCw size={14} className={data.syncing ? 'spin' : undefined} /> Aktualisieren
+          </button>
+          <button type="button" className="button" title="Oder im Kalender eine Zeit aufziehen" onClick={() => setDialog({ draft: newDraft() })}>
+            <Plus size={14} /> Termin
+          </button>
+        </div>
       </header>
+
+      {!fromTiss && (
+        <Callout kind="info" title={data.syncing ? 'Lade deinen TISS-Kalender …' : 'Noch keine Termine aus TISS.'}>
+          {data.error ? (
+            <p>TISS konnte nicht gelesen werden: {data.error}</p>
+          ) : (
+            <p>Trag in den Einstellungen deine TISS-Kalender-URL ein, dann erscheinen hier deine LVAs, Gruppen und Prüfungen.</p>
+          )}
+          <button type="button" className="button small" onClick={() => onNavigate('settings')}>
+            Zu den Einstellungen
+          </button>
+        </Callout>
+      )}
 
       <div className="filters">
         {data.courses.map((course) => (
@@ -161,7 +184,7 @@ export default function CalendarView(props: { onNavigate: (view: View) => void; 
 
       <div className="calendar-shell">
         <FullCalendar
-          plugins={[timeGridPlugin, dayGridPlugin, listPlugin]}
+          plugins={[timeGridPlugin, dayGridPlugin, listPlugin, interactionPlugin]}
           locale={deLocale}
           initialView="timeGridWeek"
           headerToolbar={{ left: 'prev,next today', center: 'title', right: 'timeGridDay,timeGridWeek,dayGridMonth,listMonth' }}
@@ -177,6 +200,15 @@ export default function CalendarView(props: { onNavigate: (view: View) => void; 
           fixedWeekCount={false}
           views={{ dayGridMonth: { dayMaxEvents: false } }}
           events={events}
+          // Pick a time range (or a day) for a new own appointment.
+          selectable
+          selectMirror
+          select={(info) => {
+            setDialog({ draft: newDraft(info.start, info.end, info.allDay) })
+            info.view.calendar.unselect()
+          }}
+          eventDrop={(change) => void moveOwn(change)}
+          eventResize={(change) => void moveOwn(change)}
           eventContent={renderEvent}
           eventClick={(info) => {
             if (info.event.id.startsWith('task:')) onNavigate('deadlines')
@@ -185,8 +217,22 @@ export default function CalendarView(props: { onNavigate: (view: View) => void; 
         />
       </div>
 
-      {selected && (
-        <EventDetails data={data} event={selected} onClose={() => setSelected(null)} onNavigate={onNavigate} onOpenNote={props.onOpenNote} />
+      {selected && selected.ownId && ownById.get(selected.ownId) ? (
+        <OwnEventDetails
+          data={data}
+          event={selected}
+          own={ownById.get(selected.ownId)!}
+          onClose={() => setSelected(null)}
+          onEdit={(own) => {
+            setSelected(null)
+            setDialog({ draft: draftOf(own), editingId: own.id })
+          }}
+        />
+      ) : (
+        selected && <EventDetails data={data} event={selected} onClose={() => setSelected(null)} onNavigate={onNavigate} onOpenNote={props.onOpenNote} />
+      )}
+      {dialog && (
+        <OwnEventDialog courses={data.courses.filter((course) => !course.hidden)} initial={dialog.draft} editingId={dialog.editingId} onClose={() => setDialog(null)} />
       )}
     </div>
   )
@@ -311,5 +357,77 @@ function NoteButton(props: { event: CalendarEvent; onNavigate: (view: View) => v
       </button>
       {error && <Callout kind="error" title={error} />}
     </>
+  )
+}
+
+const dayFormat = new Intl.DateTimeFormat('de-AT', { day: 'numeric', month: 'long', year: 'numeric' })
+
+/** An own appointment: what, when, where – edit or delete (for a series: this day or all). */
+function OwnEventDetails(props: { data: CalendarData; event: CalendarEvent; own: OwnEvent; onClose: () => void; onEdit: (own: OwnEvent) => void }) {
+  const { data, event, own } = props
+  const [confirm, setConfirm] = useState(false)
+  const course = event.courseKey ? courseMap(data).get(event.courseKey) : undefined
+  const start = new Date(event.allDay ? `${event.start}T00:00` : event.start)
+  const day = isoDate(start)
+  const remove = async (onlyThisDay: boolean): Promise<void> => {
+    const result = await window.sout.deleteOwnEvent(own.id, onlyThisDay ? day : null)
+    if (result.ok) props.onClose()
+  }
+  return (
+    <aside className="event-details" style={{ borderTopColor: eventColor(event, course) }}>
+      <div className="event-details-head">
+        <span className="event-kind">{KIND_LABELS.own}</span>
+        <button type="button" className="icon-button" aria-label="Schließen" onClick={props.onClose}>
+          <X size={16} />
+        </button>
+      </div>
+      <h2>{event.title}</h2>
+      {course && (
+        <p className="event-course">
+          {course.key} {course.type} {course.title}
+        </p>
+      )}
+      <dl className="info-list">
+        <dt>Wann</dt>
+        <dd>{event.allDay ? longDay.format(start) : `${longDay.format(start)}, ${formatTime(event.start)}–${formatTime(event.end)}`}</dd>
+        {own.repeatWeeklyUntil && (
+          <>
+            <dt>Serie</dt>
+            <dd>
+              <Repeat size={12} /> jede Woche bis {dayFormat.format(new Date(`${own.repeatWeeklyUntil}T12:00`))}
+            </dd>
+          </>
+        )}
+        {event.location && (
+          <>
+            <dt>Wo</dt>
+            <dd>{event.location}</dd>
+          </>
+        )}
+      </dl>
+      <div className="event-actions">
+        <button type="button" className="button small secondary" onClick={() => props.onEdit(own)}>
+          <Pencil size={13} /> Bearbeiten
+        </button>
+        {!confirm ? (
+          <button type="button" className="button small danger" onClick={() => setConfirm(true)}>
+            <Trash2 size={13} /> Löschen
+          </button>
+        ) : own.repeatWeeklyUntil ? (
+          <>
+            <button type="button" className="button small danger" onClick={() => void remove(true)}>
+              Nur diesen Termin
+            </button>
+            <button type="button" className="button small danger" onClick={() => void remove(false)}>
+              Ganze Serie
+            </button>
+          </>
+        ) : (
+          <button type="button" className="button small danger" onClick={() => void remove(false)} autoFocus>
+            Wirklich löschen
+          </button>
+        )}
+      </div>
+    </aside>
   )
 }

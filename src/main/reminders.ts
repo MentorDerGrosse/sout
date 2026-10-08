@@ -6,6 +6,7 @@ import { readJson, writeJson } from './jsonFile'
 import { resourcePath } from './paths'
 import { getSettings } from './settings'
 import { tasksData } from './tasks'
+import { setTrayUrgent } from './tray'
 import { showMain } from './windows'
 
 // Deadline reminders as desktop notifications, e.g. 1 day and 3 hours before (configurable).
@@ -24,7 +25,22 @@ export function startReminders(): void {
 /** Opening notices only for things that opened in the last two hours (not after a long pause). */
 const OPENED_WINDOW_MS = 2 * 60 * 60_000
 
+const DAY_MS = 24 * 60 * 60_000
+
+/** Open, already possible and due within 24 hours – the tray icon gets a red dot for these. */
+export function refreshUrgent(): void {
+  const now = Date.now()
+  const urgent = tasksData().tasks.filter((task) => {
+    if (task.status === 'done' || !task.due || task.actionable === false) return false
+    if (task.opens && Date.parse(task.opens) > now) return false
+    const due = Date.parse(task.due)
+    return due > now && due - now <= DAY_MS
+  })
+  setTrayUrgent(urgent.length)
+}
+
 function check(): void {
+  refreshUrgent()
   if (!Notification.isSupported()) return
   const settings = getSettings()
   const offsets = [...settings.reminders].sort((a, b) => b - a)

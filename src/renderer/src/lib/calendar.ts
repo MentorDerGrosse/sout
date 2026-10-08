@@ -18,10 +18,18 @@ export const KIND_LABELS: Record<EventKind, string> = {
   group: 'Gruppe',
   exam: 'Prüfung',
   holiday: 'vorlesungsfrei',
-  other: 'Termin'
+  other: 'Termin',
+  own: 'Eigener Termin'
 }
 
 export const HOLIDAY_COLOR = '#8a8f98'
+/** Own appointments without a course. */
+export const OWN_COLOR = '#64748b'
+
+/** Colour of the course; grey for holidays, slate for own appointments without a course. */
+export function eventColor(event: CalendarEvent, course: Course | undefined): string {
+  return course?.color ?? (event.kind === 'own' ? OWN_COLOR : HOLIDAY_COLOR)
+}
 
 export function courseMap(data: CalendarData): Map<string, Course> {
   return new Map(data.courses.map((course) => [course.key, course]))

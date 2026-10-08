@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Notification, nativeTheme, screen, shell } from 'electron'
+import { app, BrowserWindow, Notification, nativeTheme, screen, shell, type Rectangle } from 'electron'
 import { fileURLToPath } from 'node:url'
 import { IPC, type View } from '../shared/types'
 import { preloadPath, rendererHtml, resourcePath } from './paths'
@@ -64,10 +64,12 @@ function setUpWebContents(win: BrowserWindow): void {
   contents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return
     const key = input.key.toLowerCase()
-    if (input.control && key === 'q') {
+    // Strg on Linux and Windows, Cmd on the Mac.
+    const command = process.platform === 'darwin' ? input.meta : input.control
+    if (command && key === 'q') {
       event.preventDefault()
       app.quit()
-    } else if (input.control && key === 'w') {
+    } else if (command && key === 'w') {
       event.preventDefault()
       win.close()
     } else if (key === 'escape' && win === miniWindow) {
@@ -95,12 +97,21 @@ export function createMainWindow(view: View, show = true, note?: string): Browse
   // Closing destroys the window to free memory; the app itself keeps running in the tray.
   win.on('closed', () => {
     mainWindow = null
+    syncDock()
     if (!quitting) onMainClosed?.()
   })
   setUpWebContents(win)
   load(win, note ? `${view}:${encodeURIComponent(note)}` : view)
   mainWindow = win
+  syncDock()
   return win
+}
+
+/** macOS: a Dock icon only while the main window is open – otherwise sout lives in the menu bar. */
+export function syncDock(): void {
+  if (process.platform !== 'darwin' || !app.dock) return
+  if (mainWindow) void app.dock.show()
+  else app.dock.hide()
 }
 
 export function showMain(view?: View, note?: string): void {
@@ -146,23 +157,35 @@ export function createMiniWindow(): BrowserWindow {
   return win
 }
 
-/** Top right, just below GNOME's top bar – where the tray icons are. Needs X11/XWayland to have an effect. */
-export function positionMini(win: BrowserWindow): void {
-  const { workArea } = screen.getPrimaryDisplay()
-  win.setPosition(workArea.x + workArea.width - MINI_SIZE.width - MINI_MARGIN, workArea.y + MINI_MARGIN)
+/**
+ * Under the tray icon: Windows and macOS tell where it is (the Windows taskbar is usually at the
+ * bottom, so then the window opens above it). Otherwise top right, below GNOME's top bar – or
+ * bottom right on Windows. Needs X11/XWayland on Linux to have an effect.
+ */
+export function positionMini(win: BrowserWindow, anchor?: Rectangle): void {
+  const display = anchor ? screen.getDisplayNearestPoint({ x: anchor.x, y: anchor.y }) : screen.getPrimaryDisplay()
+  const area = display.workArea
+  const right = area.x + area.width - MINI_SIZE.width - MINI_MARGIN
+  const atBottom = anchor ? anchor.y > area.y + area.height / 2 : process.platform === 'win32'
+  const x = anchor ? Math.round(anchor.x + anchor.width / 2 - MINI_SIZE.width / 2) : right
+  win.setPosition(
+    Math.min(Math.max(x, area.x + MINI_MARGIN), right),
+    atBottom ? area.y + area.height - MINI_SIZE.height - MINI_MARGIN : area.y + MINI_MARGIN
+  )
 }
 
-export function toggleMini(): void {
+/** `anchor`: where the tray icon is, if the system says so. */
+export function toggleMini(anchor?: Rectangle): void {
   const win = miniWindow ?? createMiniWindow()
   if (win.isVisible()) {
     hideMini()
     return
   }
   if (Date.now() - miniHiddenAt < REOPEN_GUARD_MS) return
-  positionMini(win)
+  positionMini(win, anchor)
   win.show()
   // Window managers may place a newly mapped window themselves; insist on our spot.
-  positionMini(win)
+  positionMini(win, anchor)
   win.focus()
 }
 
@@ -172,11 +195,19 @@ export function hideMini(): void {
   miniHiddenAt = Date.now()
 }
 
+/** Where the tray icon sits, for texts. */
+export function trayPlace(): string {
+  if (process.platform === 'win32') return 'unten rechts in der Taskleiste (eventuell hinter dem Pfeil ^)'
+  if (process.platform === 'darwin') return 'oben rechts in der Menüleiste'
+  return 'oben rechts in der Leiste'
+}
+
 export function notifyRunningInBackground(): void {
   if (getSettings().closeHintShown || !Notification.isSupported()) return
+  const quit = process.platform === 'darwin' ? 'Cmd+Q' : 'Strg+Q'
   new Notification({
     title: 'sout läuft im Hintergrund weiter',
-    body: 'Das Symbol oben rechts öffnet die Mini-Ansicht. Ganz beenden: Strg+Q oder „Beenden“ im Menü des Symbols.',
+    body: `Das Symbol ${trayPlace()} öffnet die Mini-Ansicht. Ganz beenden: ${quit} oder „Beenden“ im Menü des Symbols.`,
     icon: resourcePath('icon.png')
   }).show()
   updateSettings({ closeHintShown: true })

@@ -3,35 +3,92 @@
 Desktop-App fürs Studium an der TU Wien: Kalender aus TISS, Abgaben aus TUWEL, Notizen pro Fach.
 Läuft im Hintergrund weiter, mit einem kleinen Fenster oben rechts (wie die JetBrains Toolbox).
 
-Stand: Phase 3 (Kalender aus TISS, Abgaben aus TUWEL, Notizen). Plan, Entscheidungen und Hintergründe: [PLAN.md](PLAN.md).
+Stand: alle Phasen bis 5 umgesetzt – Kalender aus TISS mit eigenen Terminen, Abgaben aus TUWEL, Notizen,
+Meldungen bei Änderungen, Pakete für Linux, Windows und macOS. Plan, Entscheidungen und Hintergründe: [PLAN.md](PLAN.md).
 
-## Voraussetzungen
+## Installieren
 
-- Node.js 22 und npm
-- Für das Symbol oben in der Leiste braucht GNOME die Erweiterung „AppIndicator and KStatusNotifierItem Support“:
-  ```sh
-  sudo dnf install gnome-shell-extension-appindicator
-  # einmal ab- und wieder anmelden, dann:
-  gnome-extensions enable appindicatorsupport@rgcjonas.gmail.com
-  ```
-
-## Starten
+Es gibt (noch) keine fertigen Downloads – du baust dir sout einmal selbst. Dafür brauchst du auf jedem System
+[Node.js 22 (LTS)](https://nodejs.org) mit npm und [Git](https://git-scm.com). Danach:
 
 ```sh
+git clone https://github.com/MentorDerGrosse/sout.git
+cd sout
 npm install
+```
+
+Ohne etwas zu installieren, startet `npm start` sout direkt aus dem Ordner. Für eine richtige Installation baut
+`npm run dist` ein Paket für das System, auf dem du gerade bist (Windows-Installer gehen nur unter Windows,
+Mac-Pakete nur auf einem Mac). Das Ergebnis liegt in `dist/`.
+
+### Linux (Fedora, GNOME)
+
+1. Für das Symbol oben in der Leiste braucht GNOME die Erweiterung „AppIndicator and KStatusNotifierItem Support“:
+   ```sh
+   sudo dnf install gnome-shell-extension-appindicator
+   # einmal ab- und wieder anmelden, dann:
+   gnome-extensions enable appindicatorsupport@rgcjonas.gmail.com
+   ```
+2. Paket bauen und installieren – eines von beiden:
+   - **AppImage** (eine einzelne Datei, keine Installation): `npm run dist:appimage`, dann
+     `dist/sout-0.1.0-x86_64.AppImage` starten. Fedora braucht dafür einmal `sudo dnf install fuse-libs`.
+   - **RPM** (mit Eintrag in der App-Übersicht): einmal `sudo dnf install rpm-build`, dann `npm run dist:linux` und
+     `sudo dnf install ./dist/sout-0.1.0-x86_64.rpm`. Startet danach mit `sout` oder aus der App-Übersicht.
+3. Oder ohne Paket aus dem Projektordner, siehe [Ins System einbinden](#ins-system-einbinden-linux-aus-dem-projektordner).
+
+### Windows
+
+1. Node.js und Git installieren, z. B. in der Eingabeaufforderung:
+   ```
+   winget install OpenJS.NodeJS.LTS Git.Git
+   ```
+   Danach ein neues Terminal öffnen und wie oben `git clone …` und `npm install`.
+2. `npm run dist:win` baut den Installer `dist\sout-0.1.0-x64.exe` – doppelklicken und durchklicken.
+3. Windows warnt beim ersten Start vor einer „unbekannten App“ (der Installer ist nicht signiert):
+   **Weitere Informationen → Trotzdem ausführen**.
+4. Das Symbol sitzt **unten rechts in der Taskleiste**, eventuell hinter dem Pfeil **^**. Am besten von dort in die
+   Taskleiste ziehen, dann ist es immer sichtbar. Klick öffnet die Mini-Ansicht, Rechtsklick das Menü.
+
+### macOS
+
+1. Node.js und Git: entweder von [nodejs.org](https://nodejs.org) (Git kommt mit `xcode-select --install`) oder mit
+   [Homebrew](https://brew.sh): `brew install node@22 git`. Dann wie oben `git clone …` und `npm install`.
+2. `npm run dist:mac` baut `dist/sout-0.1.0-mac-arm64.dmg` (Apple Silicon) und `…-mac-x64.dmg` (Intel). Die passende
+   `.dmg` öffnen und sout in **Programme** ziehen.
+3. sout ist nicht von Apple signiert. Beim ersten Start daher **Rechtsklick auf sout → Öffnen → Öffnen**
+   (oder Systemeinstellungen → Datenschutz & Sicherheit → „Dennoch öffnen“).
+4. Das Symbol sitzt **oben rechts in der Menüleiste**; ist etwas in den nächsten 24 Stunden fällig, steht die Anzahl daneben.
+   Tastenkürzel heißen dort Cmd statt Strg.
+
+### Fertige Pakete von GitHub bauen lassen
+
+Unter **Actions → „Bauen & testen“ → Run workflow** baut GitHub sout auf echten Linux-, Windows- und Mac-Rechnern,
+lässt dort den Testlauf laufen und legt Installer und Screenshots zum Herunterladen ab (unten auf der Seite des Laufs).
+
+### Überall gleich
+
+- **Autostart:** in der App unter Einstellungen oder im Menü des Symbols
+- **Schließen** beendet sout nicht, es bleibt beim Symbol; ganz beenden mit Strg+Q (Mac: Cmd+Q) oder „Beenden“ im Menü
+
+## Aus dem Quellcode (Entwicklung)
+
+```sh
 npm run dev      # Entwicklung mit Live-Reload (F12 öffnet die DevTools)
 npm run build    # fertige Version nach out/ bauen
 npm start        # bauen und die fertige Version starten
+npm run dist     # Paket für dieses System nach dist/
 ```
 
-## Ins System einbinden
+Alles, was die App braucht, bündelt electron-vite nach `out/`; deshalb stehen alle npm-Pakete unter
+`devDependencies` und kommen nicht ins fertige Paket.
+
+## Ins System einbinden (Linux, aus dem Projektordner)
 
 ```sh
 npm run build
 npm run install-desktop    # Eintrag in der App-Übersicht + Befehl ~/.local/bin/sout
 ```
 
-- **Autostart:** in der App unter Einstellungen (oder im Menü des Tray-Symbols)
 - **Tastenkürzel für die Mini-Ansicht:** GNOME-Einstellungen → Tastatur → eigene Tastenkombination, Befehl `~/.local/bin/sout --mini` (mit vollem Pfad)
 - Wieder entfernen: `npm run uninstall-desktop`
 
@@ -54,7 +111,7 @@ Notizen sind normale Markdown-Dateien in einem Ordner, den du beim ersten Öffne
 
 - **Schreiben:** Markdown mit Formeln (`$a^2 + b^2 = c^2$`, `$$ … $$` für eigene Zeilen), Code, Tabellen und
   Checklisten (`- [ ]`). Daneben eine Live-Ansicht, wahlweise nur Schreiben oder nur Lesen. Gespeichert wird von selbst.
-- **Kürzel:** Strg+B fett, Strg+I kursiv, Strg+M Formel, Strg+Umschalt+M Formelblock, Strg+Umschalt+L Checkliste,
+- **Kürzel** (Mac: Cmd statt Strg): Strg+B fett, Strg+I kursiv, Strg+M Formel, Strg+Umschalt+M Formelblock, Strg+Umschalt+L Checkliste,
   Strg+E Code, Strg+F suchen in der Notiz, Strg+N neue Notiz, Strg+Umschalt+F alle Notizen durchsuchen.
 - **Folien:** PDFs ins Fenster ziehen oder über „Folien daneben“ hinzufügen – sie landen im `Folien/`-Ordner des Fachs.
 - **Verknüpft:** Im Kalender legt „Mitschrift anlegen“ die Notiz für genau diese Vorlesung an (mit Zeit und Raum),
@@ -64,6 +121,9 @@ Notizen sind normale Markdown-Dateien in einem Ordner, den du beim ersten Öffne
   geändert, fragt es nach, statt etwas zu überschreiben.
 
 ## Wo liegen die Daten?
+
+Unter Linux in `~/.config/sout/`, unter Windows in `%APPDATA%\sout\`, unter macOS in
+`~/Library/Application Support/sout/`. Die Tabelle nennt die Linux-Pfade:
 
 | Datei | Inhalt |
 |---|---|
@@ -77,9 +137,11 @@ Notizen sind normale Markdown-Dateien in einem Ordner, den du beim ersten Öffne
 | `~/.config/sout/notes.json` | für welche Fächer sout schon einen Notizordner angelegt hat (ein gelöschter kommt nicht wieder) |
 | `~/Studium/` (oder der gewählte Ordner) | die Notizen selbst |
 | `~/.config/sout/Partitions/tuwel/` | die TU-Wien-/TUWEL-Anmeldung (Cookies) für die stille Erneuerung; „Abmelden“ löscht sie |
-| `~/.config/autostart/sout.desktop` | nur wenn Autostart an ist |
+| `~/.config/sout/events.json` | eigene Termine (Lerngruppe, Lernblöcke …) |
+| `~/.config/sout/changes.json` | Neuigkeiten der letzten zwei Wochen (Raumwechsel, neue Aufgaben, Bewertungen …) |
+| `~/.config/autostart/sout.desktop` | nur unter Linux und nur wenn Autostart an ist (Windows/macOS: Anmeldeobjekte des Systems) |
 
-## Startschalter: XWayland und Deutsch
+## Startschalter: XWayland und Deutsch (Linux)
 
 sout läuft unter Linux über XWayland (`--ozone-platform=x11`), weil Wayland Apps ihre Fenster nicht selbst
 platzieren lässt – das Mini-Fenster muss aber oben rechts unter dem Tray-Symbol sitzen. Außerdem startet es mit
@@ -95,13 +157,18 @@ Die Zeile `GetVSyncParametersIfAvailable() failed for 1 times!` im Terminal ist 
 
 ```sh
 npm run build
-node_modules/electron/dist/electron . --ozone-platform=x11 --lang=de-AT --smoke-test=/tmp/sout-smoke
+npm run smoke              # unter Linux ohne Bildschirm: xvfb-run -a npm run smoke
 ```
 
-Startet alles unsichtbar, legt Screenshots der Ansichten und `report.json` im angegebenen Ordner ab und beendet sich.
-Nutzt einen eigenen Datenordner und nicht den Schlüsselbund. Die Notizen legt er in einem Ordner `Studium` darin an
-und prüft dabei auch das Speichern: von selbst, bei Änderungen von außen, bei Konflikten und beim Schließen
-(`notes.editing` in `report.json`).
+Erzeugt erfundene Testdaten (Fächer wie „Beispielkunde“, Abgaben, eine zweite Synchronisierung mit Raumwechsel,
+verschobenem und entfallenem Termin, neuem Prüfungstermin und neuer Aufgabe), startet sout unsichtbar damit, legt
+Screenshots der Ansichten und `report.json` in `smoke/` ab und meldet, ob alles geklappt hat. Geprüft wird unter
+anderem das Speichern der Notizen (von selbst, bei Änderungen von außen, bei Konflikten, beim Schließen), das
+Erkennen von Änderungen und dass PDFs nur aus dem Notizordner kommen. Nutzt einen eigenen Datenordner und nicht den
+Schlüsselbund.
+
+Ohne Testdaten geht es auch direkt: `node_modules/electron/dist/electron . --smoke-test=<ordner>` (unter Linux mit
+`--ozone-platform=x11 --lang=de-AT`); bei einem installierten Paket das Programm selbst mit `--smoke-test=<ordner>`.
 
 Hilfen für die Entwicklung (nur ungepackt):
 
@@ -112,6 +179,7 @@ Hilfen für die Entwicklung (nur ungepackt):
 | `--dump-tuwel=<datei>` | speichert, was TUWEL liefert (Zeitleiste, Abgaben, Tests), als JSON |
 | `SOUT_TUWEL_FILE=<datei>` | nimmt diese JSON-Datei statt TUWEL |
 | `--probe-tuwel` | prüft, ob TUWEL den gespeicherten Schlüssel noch annimmt (gibt nur „gültig“/„abgelehnt“ aus) |
+| `--dump-grades=<datei>` | holt still einen frischen Schlüssel und die Bewertungen; gibt nur deren Aufbau aus |
 | `SOUT_SMOKE_THEME=light` | Testlauf im hellen statt dunklen Modus |
 
 ## Lizenz

@@ -10,6 +10,11 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const launcher = join(homedir(), '.local', 'bin', 'sout')
 const desktopFile = join(process.env.XDG_DATA_HOME || join(homedir(), '.local', 'share'), 'applications', 'sout.desktop')
 
+if (process.platform !== 'linux') {
+  console.log('Nur unter Linux nötig. Unter Windows und macOS: npm run dist baut einen Installer (siehe README).')
+  process.exit(0)
+}
+
 if (process.argv.includes('--remove')) {
   rmSync(launcher, { force: true })
   rmSync(desktopFile, { force: true })
