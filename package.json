@@ -5,6 +5,7 @@
   "description": "Studium an der TU Wien organisieren: TISS-Kalender, TUWEL-Abgaben, Notizen pro Fach",
   "private": true,
   "license": "MIT",
+  "homepage": "https://github.com/MentorDerGrosse/sout",
   "main": "./out/main/index.js",
   "desktopName": "sout.desktop",
   "scripts": {
