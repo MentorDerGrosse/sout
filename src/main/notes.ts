@@ -229,6 +229,25 @@ export function saveNoteImage(path: string, data: Uint8Array, type: string): str
   return `${IMAGE_DIR}/${basename(abs)}`
 }
 
+export function noteFileExists(path: string): boolean {
+  try {
+    return statOrNull(resolveNote(path))?.isFile() ?? false
+  } catch {
+    return false
+  }
+}
+
+/** Writes a file into the notes folder (folders created as needed); returns its path and mtime. */
+export function writeNoteFile(path: string, data: Uint8Array): { path: string; mtime: number } {
+  const abs = resolveNote(path)
+  mkdirSync(dirname(abs), { recursive: true })
+  const temp = join(dirname(abs), `.${basename(abs)}.sout-tmp`)
+  writeFileSync(temp, data)
+  renameSync(temp, abs)
+  notesChanged()
+  return { path: toRel(abs), mtime: statSync(abs).mtimeMs }
+}
+
 /** A new file in a folder of the notes (created if needed); "Name 2.md" if the name is taken. */
 export function createNoteFile(dir: string, name: string, content: string): string {
   const abs = uniquePath(resolveNote(dir), name)

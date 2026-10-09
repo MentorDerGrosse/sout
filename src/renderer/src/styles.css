@@ -3299,3 +3299,7 @@ body.is-print {
   max-width: none;
   padding: 0;
 }
+
+.materials-row {
+  margin-top: 10px;
+}

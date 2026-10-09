@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const dir = resolve(process.argv[2] ?? join(root, 'smoke'))
@@ -239,6 +239,14 @@ function tuwel(extra) {
 }
 
 /** Announcements, Kreuzerl sheets, a booked appointment and a booking period, grades – as TUWEL answers. */
+/** A file of a TUWEL activity; test data points at a file on disk. */
+function material(name, modified) {
+  const path = join(data, 'tuwel-files', name)
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, `%PDF-1.4\n% ${name} – Testdatei\n`)
+  return { type: 'file', filename: name, filepath: '/', filesize: 40, fileurl: pathToFileURL(path).href, timemodified: modified }
+}
+
 function tuwelExtras(extra, ts, eb, bk) {
   return {
     courses: [eb, bk],
@@ -274,6 +282,18 @@ function tuwelExtras(extra, ts, eb, bk) {
       { id: 42, name: 'Registration start: Sprechstunde', courseid: bk.id, modulename: 'organizer', instance: 6, eventtype: 'Instance', timestart: ts(-24), timeduration: 0 },
       { id: 43, name: 'Registration end: Sprechstunde', courseid: bk.id, modulename: 'organizer', instance: 6, eventtype: 'Instance', timestart: ts(72), timeduration: 0 }
     ],
+    // Course files: one "Datei" activity, one "Verzeichnis" with two files (test files on disk).
+    contents: {
+      [eb.id]: [
+        {
+          modules: [
+            { id: 81, name: 'Folien Kapitel 1', modname: 'resource', contents: [material('vo01.pdf', ts(-100))] },
+            { id: 82, name: 'Übungsblätter', modname: 'folder', contents: [material('blatt1.pdf', ts(-90)), material('blatt2.pdf', ts(-10))] },
+            { id: 83, name: 'Forum', modname: 'forum' }
+          ]
+        }
+      ]
+    },
     grades: {
       [eb.id]: [
         { id: 61, itemname: 'Kreuzerlübung 1', itemtype: 'mod', graderaw: 2, gradeformatted: '2,00', rangeformatted: '0,00–3,00', percentageformatted: '66,67 %', feedback: '<p>Beispiel 1 gut präsentiert.</p>', gradedategraded: ts(-48) },
@@ -367,6 +387,10 @@ const expectedDeadlines = ['345.678 group Gruppe 1+Gruppe 2 open', '345.678 grou
 if (JSON.stringify(report.deadlines) !== JSON.stringify(expectedDeadlines)) problems.push(`Fristen: ${JSON.stringify(report.deadlines)} statt ${JSON.stringify(expectedDeadlines)}`)
 // An assignment, an exam registration and a group registration, each ending within 20 hours.
 if (report.trayUrgent !== 3) problems.push(`Tray: ${report.trayUrgent} statt 3 Fristen in den nächsten 24 Stunden`)
+const materials = (report.notes?.files ?? []).filter((path) => path.includes('Unterlagen')).map((path) => path.replaceAll('\\', '/'))
+for (const expected of ['Unterlagen/Folien Kapitel 1.pdf', 'Unterlagen/Übungsblätter/blatt1.pdf', 'Unterlagen/Übungsblätter/blatt2.pdf']) {
+  if (!materials.some((path) => path.endsWith(expected))) problems.push(`TUWEL-Unterlagen: ${expected} fehlt (${JSON.stringify(materials)})`)
+}
 const noteExtras = report.notes?.extras
 if (!noteExtras?.imageExists) problems.push(`Bild einfügen: ${JSON.stringify(noteExtras?.image)}`)
 if (JSON.stringify(noteExtras?.missingLinks) !== '["Zusammenfassung"]') problems.push(`[[Links]]: ${JSON.stringify(noteExtras?.missingLinks)} statt nur „Zusammenfassung“ als fehlend`)

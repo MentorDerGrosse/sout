@@ -10,7 +10,8 @@ import { resourcePath } from './paths'
 import { clearSecret, getSecret, hasSecret, setSecret } from './secrets'
 import { getSettings } from './settings'
 import { TuwelError, tuwelCall } from './tuwelApi'
-import { applyExtras, bookingTasks, clearTuwelExtras, fetchExtras, gradesDue, type RawExtras } from './tuwelExtras'
+import { applyExtras, bookingTasks, clearTuwelExtras, fetchExtras, gradesDue, materialCourses, type RawExtras } from './tuwelExtras'
+import { fetchContents, materialsDue, syncMaterials } from './tuwelMaterials'
 import { forgetTuwelLogin, lastLoginTrace, loginToTuwel } from './tuwelLogin'
 import { fetchSnapshot, toTasks, type MoodleSnapshot } from './tuwelTasks'
 import { showMain } from './windows'
@@ -232,6 +233,13 @@ function taskChange(task: Task): NewChange {
  * Announcements, Kreuzerlübungen, Terminbuchungen and (every two hours) grades – with the same
  * token, or from the test data. A bonus: errors are ignored, the deadlines are what matters.
  */
+let lastExtras: RawExtras | null = null
+
+/** Test data only: the course files again, e.g. once the notes folder exists. */
+export async function syncTestMaterials(): Promise<void> {
+  if (lastExtras?.contents) reportChanges(await syncMaterials(null, materialCourses(lastExtras), lastExtras.contents), true)
+}
+
 async function syncExtras(token: string | null, userid: number, testData: RawExtras | undefined): Promise<void> {
   const settings = getSettings()
   try {
@@ -241,6 +249,13 @@ async function syncExtras(token: string | null, userid: number, testData: RawExt
     const found = applyExtras(raw, settings.notifyGrades, (key, fallback) => courseName(key, fallback) ?? fallback)
     reportChanges(found.filter((change) => change.kind === 'announcement'), settings.notifyAnnouncements)
     reportChanges(found.filter((change) => change.kind === 'grade'), true)
+    // Course files into the notes folder, every six hours.
+    lastExtras = raw
+    if (materialsDue() || (!token && raw.contents)) {
+      const courses = materialCourses(raw)
+      const contents = token ? await fetchContents(token, courses) : (raw.contents ?? {})
+      reportChanges(await syncMaterials(token, courses, contents), true)
+    }
   } catch (error) {
     console.log(`[tuwel] Ankündigungen, Kreuzerl und Bewertungen nicht abgefragt: ${error instanceof Error ? error.message : String(error)}`)
   }

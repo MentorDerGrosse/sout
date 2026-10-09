@@ -13,7 +13,7 @@ import { notesData, saveNoteImage, searchNotes, startNotesWatch, writeNote } fro
 import { handleNotesScheme } from './notesProtocol'
 import { addOwnEvent } from './ownEvents'
 import { refreshUrgent } from './reminders'
-import { startTasksSync, syncTasks, tasksData } from './tasks'
+import { startTasksSync, syncTasks, syncTestMaterials, tasksData } from './tasks'
 import { startTuwelExtras, tuwelExtras } from './tuwelExtras'
 import { startStudies, studiesData, updateStudyCourse } from './studies'
 import { readJson } from './jsonFile'
@@ -483,6 +483,8 @@ async function smokeNotes(main: BrowserWindow, mini: BrowserWindow, dir: string,
   shots['notes-setup'] = await screenshot(main, dir, 'notes-setup')
 
   const setup = setupNotes(join(dir, 'Studium'))
+  // TUWEL files go into the course folders, now that there are some.
+  await syncTestMaterials()
   const lecture = calendarData().events.find((event) => event.id === '123.456-now') ?? calendarData().events.find((event) => event.kind === 'course')
   const lecturePath = lecture ? noteForEvent(lecture.id) : null
   if (lecturePath) writeNote(lecturePath, SAMPLE_NOTE, null)

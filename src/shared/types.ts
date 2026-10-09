@@ -32,6 +32,8 @@ export interface Settings {
   notifyGrades: boolean
   /** Notify about new announcements in the TUWEL courses. */
   notifyAnnouncements: boolean
+  /** Download TUWEL course files into the course's notes folder ("Unterlagen"). */
+  loadMaterials: boolean
   /** Exam registrations in TISS: notify when they open, remind before they close, report new exam dates. */
   notifyExamRegistration: boolean
   /** Light, dark, or as the system says. */

@@ -108,7 +108,7 @@ export default function SettingsView() {
 
       <RemindersSection settings={settings} />
 
-      <NotesSection />
+      <NotesSection settings={settings} />
 
       <CoursesSection />
 
@@ -567,7 +567,7 @@ function RemindersSection({ settings }: { settings: Settings }) {
   )
 }
 
-function NotesSection() {
+function NotesSection({ settings }: { settings: Settings }) {
   const { notes, reload } = useNotes()
   const [error, setError] = useState<string | null>(null)
   if (!notes) return null
@@ -614,6 +614,18 @@ function NotesSection() {
             </div>
           )}
           {error && <Callout kind="error" title={error} />}
+        </div>
+      </div>
+      <div className="rows materials-row">
+        <div className="row">
+          <div className="row-text">
+            <div className="row-title">TUWEL-Unterlagen laden</div>
+            <div className="row-desc">
+              Dateien aus deinen TUWEL-Kursen (Folien, Skripten, Angaben) kommen alle sechs Stunden in den Ordner „Unterlagen“ des Fachs. Was du dort löschst, kommt
+              nicht wieder.
+            </div>
+          </div>
+          <Toggle label="TUWEL-Unterlagen laden" checked={settings.loadMaterials} onChange={(value) => void window.sout.updateSettings({ loadMaterials: value })} />
         </div>
       </div>
       <p className="section-hint">Beim Wechsel werden vorhandene Notizen nicht verschoben – sout zeigt dann die Notizen im neuen Ordner.</p>

@@ -5,6 +5,7 @@ import type { NewChange } from './changes'
 import { readJson, writeJson } from './jsonFile'
 import { TUWEL_URL, tuwelCall } from './tuwelApi'
 import { htmlToText, lvaNumber } from './tuwelTasks'
+import type { MaterialCourse, RawSection } from './tuwelMaterials'
 
 // More from TUWEL than the deadlines, with the token of each tasks sync: announcements of the
 // courses, Kreuzerlübungen (which examples are ticked), booked appointments and booking periods
@@ -88,6 +89,8 @@ export interface RawExtras {
   calendar: RawCalendarEvent[]
   /** Grade items by course id; missing when they weren't asked for this time. */
   grades?: Record<string, RawGradeItem[]>
+  /** Course contents (files) by course id – test data only; TUWEL is asked in tuwelMaterials. */
+  contents?: Record<string, RawSection[]>
 }
 
 /** An appointment booked in TUWEL (Terminbuchung), e.g. for an Abgabegespräch. */
@@ -156,6 +159,11 @@ export function tuwelExtras(): TuwelExtras {
 /** Forget everything, e.g. after logging out of TUWEL. */
 export function clearTuwelExtras(): void {
   saveCache(EMPTY)
+}
+
+/** The courses as the materials download needs them. */
+export function materialCourses(raw: RawExtras): MaterialCourse[] {
+  return raw.courses.map((course) => ({ id: course.id, lva: lvaNumber(course), name: clean(course.fullname) }))
 }
 
 /** Grades are asked for every two hours (and only if wanted). */

@@ -15,6 +15,7 @@ const DEFAULTS: Settings = {
   notifyNewTasks: true,
   notifyGrades: true,
   notifyAnnouncements: true,
+  loadMaterials: true,
   notifyExamRegistration: true,
   themeMode: 'system',
   lightPalette: 'standard',
