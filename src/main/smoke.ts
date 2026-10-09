@@ -642,18 +642,23 @@ function loaded(win: BrowserWindow): Promise<void> {
 }
 
 async function screenshot(win: BrowserWindow, dir: string, name: string): Promise<string> {
-  try {
-    // Hidden windows repaint lazily; ask for a fresh frame first.
-    win.webContents.invalidate()
-    await delay(250)
-    const image = await win.webContents.capturePage()
-    if (image.isEmpty()) return 'empty'
-    writeFileSync(join(dir, `${name}.png`), image.toPNG())
-    const { width, height } = image.getSize()
-    return `${width}x${height}`
-  } catch (error) {
-    return `failed: ${error instanceof Error ? error.message : String(error)}`
+  // Without a real graphics card (GitHub's Linux machines) a capture fails now and then: try again.
+  let result = 'empty'
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      // Hidden windows repaint lazily; ask for a fresh frame first.
+      win.webContents.invalidate()
+      await delay(250 + attempt * 750)
+      const image = await win.webContents.capturePage()
+      if (image.isEmpty()) continue
+      writeFileSync(join(dir, `${name}.png`), image.toPNG())
+      const { width, height } = image.getSize()
+      return `${width}x${height}`
+    } catch (error) {
+      result = `failed: ${error instanceof Error ? error.message : String(error)}`
+    }
   }
+  return result
 }
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
