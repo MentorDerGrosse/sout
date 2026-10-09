@@ -49,6 +49,13 @@ Welchen Chip dein Mac hat, steht unter  → Über diesen Mac.
    - Bei älteren macOS-Versionen geht auch: Rechtsklick auf sout → Öffnen → Öffnen.
 3. Das Symbol sitzt **oben rechts in der Menüleiste**. Ist etwas in den nächsten 24 Stunden fällig, steht die Anzahl
    daneben. Tastenkürzel heißen auf dem Mac Cmd statt Strg.
+4. **Sagt macOS „sout ist beschädigt“** (bei Version 0.2.0 auf Macs mit Apple-Chip): sout ist nicht kaputt, nur
+   nicht von Apple geprüft. sout in Programme ziehen, dann im Terminal (Programme → Dienstprogramme → Terminal):
+   ```sh
+   xattr -cr /Applications/sout.app
+   codesign --force --deep --sign - /Applications/sout.app
+   ```
+   Danach startet sout normal. Ab Version 0.2.1 sollte das nicht mehr nötig sein.
 
 ### Linux (Fedora, GNOME)
 
