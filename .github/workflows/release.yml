@@ -1,0 +1,91 @@
+# A new version of sout: raise "version" in package.json, commit, then push a tag with that version:
+#   git tag v0.2.0 && git push origin v0.2.0
+# GitHub builds sout on Linux, Windows and macOS, runs the smoke test there and publishes a release
+# with the installers – and the files Windows and the AppImage use to update themselves
+# (latest*.yml, *.blockmap). See src/main/updater.ts.
+name: Version veröffentlichen
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Version passt zum Tag
+        shell: bash
+        run: |
+          version="v$(node -p "require('./package.json').version")"
+          if [ "$version" != "$GITHUB_REF_NAME" ]; then
+            echo "package.json sagt $version, der Tag heißt $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+
+      - name: Linux – virtueller Bildschirm und RPM-Werkzeug
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb rpm
+          # Ubuntu 24.04 blocks the user namespaces Chromium's sandbox needs.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - run: npm ci
+      # Electron 44 fetches its binary on first use; do it up front.
+      - run: node node_modules/electron/install.js
+      - run: npm run typecheck
+      - run: npm run build
+
+      - name: Testlauf (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run smoke -- smoke
+      - name: Testlauf (Windows, macOS)
+        if: runner.os != 'Linux'
+        run: npm run smoke -- smoke
+
+      - name: Installer bauen
+        run: npx electron-builder --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sout-${{ runner.os }}
+          path: |
+            dist/*.AppImage
+            dist/*.rpm
+            dist/*.exe
+            dist/*.dmg
+            dist/*-mac-*.zip
+            dist/*.blockmap
+            dist/latest*.yml
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Release anlegen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "sout ${GITHUB_REF_NAME#v}" \
+            --notes "Installieren und Aktualisieren: siehe [README](https://github.com/$GITHUB_REPOSITORY#installieren). Windows: sout-…-x64.exe · macOS: sout-…-mac-arm64.dmg (Apple-Chip) oder …-mac-x64.dmg (Intel) · Linux: sout-…-x86_64.AppImage (aktualisiert sich selbst) oder .rpm"

@@ -30,6 +30,7 @@ import { fixCursorSize, missingStartupArgs, trayHostAvailable } from './system'
 import { startTasksSync } from './tasks'
 import { startTuwelExtras } from './tuwelExtras'
 import { startStudies } from './studies'
+import { startUpdates } from './updater'
 import { createTray, ensureTray } from './tray'
 import { applyTheme, broadcast, createMiniWindow, miniTakesOver, notifyRunningInBackground, setOnMainClosed, showMain, syncDock, toggleMini } from './windows'
 
@@ -121,6 +122,7 @@ async function start(): Promise<void> {
     refreshUrgent()
   })
   startStudies(() => broadcast(IPC.studiesChanged))
+  startUpdates(() => broadcast(IPC.updateChanged))
   // Announcements, Kreuzerl, grades – and booked appointments (calendar) and booking periods (tasks).
   startTuwelExtras(() => {
     broadcast(IPC.tuwelExtrasChanged)

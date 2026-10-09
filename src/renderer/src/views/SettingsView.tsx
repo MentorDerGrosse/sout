@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import { Check, FolderOpen, KeyRound, LoaderCircle, LogIn, LogOut } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Check, Download, FolderOpen, KeyRound, LoaderCircle, LogIn, LogOut, RefreshCw } from 'lucide-react'
 import { DARK_PALETTES, LIGHT_PALETTES, THEME_MODES, type Palette } from '../../../shared/themes'
-import { REMINDER_CHOICES, type AppInfo, type Course, type SecretsStatus, type Settings } from '../../../shared/types'
+import { REMINDER_CHOICES, type AppInfo, type Course, type SecretsStatus, type Settings, type UpdateState } from '../../../shared/types'
 import { Callout, Command, Toggle } from '../components'
 import { syncStatus, useCalendar } from '../lib/calendar'
 import { useAppState } from '../lib/hooks'
@@ -115,6 +115,7 @@ export default function SettingsView() {
       <section className="section">
         <h2>Info</h2>
         <div className="rows">
+          <UpdateRow packaged={info.packaged} />
           <div className="row">
             <InfoList info={info} />
           </div>
@@ -194,6 +195,56 @@ function PaletteRow(props: { title: string; hint: string; palettes: Palette[]; v
           )
         })}
       </div>
+    </div>
+  )
+}
+
+/** New versions: Windows and the AppImage install them themselves, elsewhere a hint and the way there. */
+function UpdateRow({ packaged }: { packaged: boolean }) {
+  const [update, setUpdate] = useState<UpdateState | null>(null)
+  useEffect(() => {
+    const load = (): void => void window.sout.getUpdateState().then(setUpdate)
+    load()
+    return window.sout.onUpdateChanged(load)
+  }, [])
+  if (!update) return null
+  const text = !packaged
+    ? 'Aus dem Projektordner gestartet: neue Versionen mit git pull, siehe README.'
+    : update.status === 'ready'
+      ? `sout ${update.latest} ist geladen und wird beim Beenden installiert.`
+      : update.status === 'downloading'
+        ? `sout ${update.latest} wird geladen …`
+        : update.status === 'available'
+          ? `sout ${update.latest} ist da. Auf diesem System aktualisierst du von Hand – die Anleitung zeigt wie.`
+          : update.status === 'checking'
+            ? 'Schaue nach neuen Versionen …'
+            : update.automatic
+              ? 'sout lädt neue Versionen selbst und installiert sie beim Beenden.'
+              : 'sout schaut alle sechs Stunden nach neuen Versionen und sagt Bescheid.'
+  return (
+    <div className="row">
+      <div className="row-text">
+        <div className="row-title">Updates · Version {update.current}</div>
+        <div className="row-desc">
+          {text}
+          {update.error && packaged && ` (Zuletzt: ${update.error})`}
+        </div>
+      </div>
+      {packaged && update.status === 'ready' && (
+        <button type="button" className="button" onClick={() => window.sout.installUpdate()}>
+          <RefreshCw size={14} /> Jetzt neu starten
+        </button>
+      )}
+      {packaged && update.status === 'available' && (
+        <button type="button" className="button" onClick={() => window.sout.openUpdateHelp()}>
+          <Download size={14} /> So aktualisierst du
+        </button>
+      )}
+      {packaged && (update.status === 'idle' || update.status === 'checking') && (
+        <button type="button" className="button secondary" disabled={update.status === 'checking'} onClick={() => void window.sout.checkForUpdates()}>
+          Jetzt nachsehen
+        </button>
+      )}
     </div>
   )
 }

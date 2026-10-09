@@ -6,6 +6,7 @@ import { calendarChanged, calendarData, clearCalendar, syncCalendar, updateCours
 import { changes, dismissChange } from './changes'
 import { dismissExam, examsData, syncExams } from './exams'
 import { tuwelExtras } from './tuwelExtras'
+import { checkForUpdates, installUpdate, openUpdateHelp, updateState } from './updater'
 import { addStudyCourse, removeStudyCourse, studiesData, updateStudyCourse } from './studies'
 import { chooseNotesDir, createLinkedNote, createNote, importPdfs, moveNote, noteForEvent, noteForTask, quickNote, setupNotes } from './courseNotes'
 import { flushNote, notesData, readNote, renameNote, resolveNote, saveNoteImage, searchNotes, showInFolder, trashNote, writeNote } from './notes'
@@ -138,6 +139,10 @@ export function registerIpc(): void {
     return changes()
   })
   ipcMain.handle(IPC.getTuwelExtras, () => tuwelExtras())
+  ipcMain.handle(IPC.getUpdateState, () => updateState())
+  ipcMain.handle(IPC.checkForUpdates, () => checkForUpdates())
+  ipcMain.on(IPC.installUpdate, () => installUpdate())
+  ipcMain.on(IPC.openUpdateHelp, () => openUpdateHelp())
   ipcMain.handle(IPC.getStudies, () => studiesData())
   ipcMain.handle(IPC.updateStudyCourse, (_event, key: unknown, semester: unknown, patch: unknown) => {
     updateStudyCourse(text(key), text(semester), patch && typeof patch === 'object' ? patch : {})

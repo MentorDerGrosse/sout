@@ -1,6 +1,6 @@
 # sout – Plan
 
-Lebendes Dokument, Stand 9. Oktober 2026 (Phasen 0–5 umgesetzt, danach Prüfungsanmeldungen). Fasst das Brainstorming und alle bisherigen Entscheidungen zusammen.
+Lebendes Dokument, Stand 9. Oktober 2026 (Phasen 0–5 umgesetzt, danach weitere Funktionen). Fasst das Brainstorming und alle bisherigen Entscheidungen zusammen.
 
 ## Ziel
 
@@ -197,32 +197,30 @@ Branch `weitere-funktionen`. Nach und nach kommen hierher Punkte aus „Später 
   - Benachrichtigungen (abschaltbar): wenn eine Anmeldung aufmacht, vor dem Anmeldeschluss zu den Erinnerungszeiten,
     neuer Prüfungstermin in TISS (auch unter „Neuigkeiten“); roter Punkt am Symbol, wenn eine Anmeldung in 24 Stunden endet
   - Ein neuer Prüfungstermin im TISS-Kalender heißt jetzt „Zur Prüfung angemeldet“
+- [x] **Design:** hell, dunkel oder wie das System; je drei Farbschemata (Standard, Catppuccin Latte, Solarized;
+  Standard, Catppuccin Mocha, Nord)
+- [x] **Kalender:** Überschneidungen markiert; LectureTube-Livestream je Hörsaal (Liste von better-tiss-calendar);
+  Link zum TUWEL-Kurs (von der TISS-LVA-Seite oder TISS' LVA-Schnittstelle); Fristen für Gruppenanmeldung (nur
+  LVAs ohne Gruppe) und LVA-Abmeldung
+- [x] **TUWEL:** Ankündigungen (Forum „Ankündigungen“) auf „Heute“ und als Neuigkeit; Kreuzerlübungen mit
+  angekreuzten Beispielen, Punkten und Feedback; Terminbuchungen (gebuchte Termine im Kalender, offene Buchungszeiten
+  als Aufgabe – über TUWEL-Kalenderereignisse, die Terminbuchung hat keine eigene Schnittstelle); Raum bei Präsenztests
+  aus dem TISS-Kalender
+- [x] **Noten:** ECTS (TISS-LVA-Seite) und selbst eingetragene Noten je Semester, gewichteter Durchschnitt; Bewertungen
+  mit Feedback aus TUWEL
+- [x] **Notizen:** Bilder per Strg+V (Ordner „Bilder“), [[Links]] zwischen Notizen, PDF-Export, TUWEL-Unterlagen
+  automatisch in „Unterlagen“ des Fachs
+- [x] **Updates:** GitHub-Releases (Ablauf „Version veröffentlichen“ bei einem Tag `v…`); Windows und AppImage
+  aktualisieren sich selbst (electron-updater), macOS und RPM melden die neue Version; README mit Anleitung
+- [ ] Die TUWEL-Teile mit echten Daten prüfen (bisher nur mit Testdaten; die TUWEL-Anmeldung war abgelaufen)
+- [ ] Erste Version veröffentlichen (Tag `v0.2.0`)
 
 ### Später & Ideen (ganz am Ende, nach Phase 5)
 
 Hier sammelt sich alles, was „später“ kommen soll, damit nichts verloren geht. Neue Ideen kommen auch hierher. Meldungen bei Raumwechsel, Absage, neuer Aufgabe oder Note stehen schon in Phase 4.
 
-Kalender
-
-- [ ] Link zum TUWEL-Kurs
-- [ ] LectureTube-Link
-- [ ] Überschneidungen markieren
-- [ ] Fristen für Gruppen- und LVA-Anmeldung (stehen wie die Prüfungen auf der LVA-Seite)
-
-Abgaben & Tests
-
-- [ ] Kreuzerlübungen genauer (was ist angekreuzt)
-- [ ] Terminbuchungen für Abgabegespräche
-- [ ] Noten und Feedback ansehen
-- [ ] Forum-Ankündigungen
-- [ ] Raum bei Präsenztests aus TISS
-
 Notizen
 
-- [ ] Bilder per Strg+V
-- [ ] Links zwischen Notizen
-- [ ] TUWEL-Unterlagen automatisch laden
-- [ ] PDF-Export
 - [ ] Karteikarten
 - [ ] Rechtschreibprüfung (zurzeit aus, sonst wären Formeln rot unterstrichen)
 
@@ -230,7 +228,6 @@ Sonstiges
 
 - [ ] Lernplaner (vom Prüfungstermin rückwärts Lernblöcke einplanen)
 - [ ] Lernzeit pro Fach
-- [ ] ECTS- und Notenübersicht
 - [ ] Mensa-Plan
 
 ## Offene Punkte

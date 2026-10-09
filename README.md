@@ -3,15 +3,123 @@
 Desktop-App fürs Studium an der TU Wien: Kalender aus TISS, Prüfungen mit Anmeldefristen, Abgaben aus TUWEL, Notizen pro Fach.
 Läuft im Hintergrund weiter, mit einem kleinen Fenster oben rechts (wie die JetBrains Toolbox).
 
-Stand: alle Phasen bis 5 umgesetzt – Kalender aus TISS mit eigenen Terminen, Abgaben aus TUWEL, Notizen,
-Meldungen bei Änderungen, Pakete für Linux, Windows und macOS; dazu Prüfungstermine und Anmeldefristen.
+Kurz, was sout kann:
+
+- **Kalender** aus TISS mit eigenen Terminen, Überschneidungen markiert, LectureTube- und TUWEL-Links, gebuchte
+  TUWEL-Termine (z. B. Abgabegespräche)
+- **Abgaben & Tests** aus TUWEL, Kreuzerlübungen mit angekreuzten Beispielen, Raum bei Präsenztests,
+  Ankündigungen der Kurse
+- **Prüfungen**: Termine und Anmeldefristen deiner LVAs, Gruppenanmeldung, LVA-Abmeldefrist
+- **Noten**: ECTS und Notendurchschnitt, Bewertungen und Feedback aus TUWEL
+- **Notizen** pro Fach mit Formeln, PDFs daneben, Bildern per Strg+V, Links zwischen Notizen, PDF-Export;
+  TUWEL-Unterlagen landen von selbst im Fach-Ordner
+- Erinnerungen, Mini-Ansicht beim Symbol, hell/dunkel mit mehreren Farbschemata, Updates von selbst
+  (Windows, Linux) – für Linux, Windows und macOS
 Plan, Entscheidungen und Hintergründe: [PLAN.md](PLAN.md).
 
 ## Installieren
 
-Es gibt (noch) keine fertigen Downloads: Du baust dir sout einmal selbst. Das klingt schwieriger, als es ist.
-Du tippst ein paar Befehle in ein Terminal, den Rest erledigt der Computer. Einmal einrichten dauert etwa
-15 Minuten, danach geht jedes Update in wenigen Minuten (siehe [Aktualisieren](#aktualisieren)).
+Die fertigen Dateien liegen bei jeder Version unter **[Releases](https://github.com/MentorDerGrosse/sout/releases/latest)**
+(rechts auf der GitHub-Seite oder über den Link). Dort unter **Assets** die passende Datei herunterladen:
+
+| System | Datei |
+|---|---|
+| Windows | `sout-…-x64.exe` |
+| macOS mit Apple-Chip (M1, M2, M3 …) | `sout-…-mac-arm64.dmg` |
+| macOS mit Intel-Chip | `sout-…-mac-x64.dmg` |
+| Linux (alle) | `sout-…-x86_64.AppImage` – aktualisiert sich selbst |
+| Fedora, wer lieber ein Paket will | `sout-…-x86_64.rpm` |
+
+Welchen Chip dein Mac hat, steht unter  → Über diesen Mac.
+
+### Windows
+
+1. `sout-…-x64.exe` doppelklicken und durchklicken.
+2. Windows warnt vor einer „unbekannten App“, weil sout nicht signiert ist: **Weitere Informationen → Trotzdem ausführen**.
+3. Das Symbol sitzt **unten rechts in der Taskleiste**, eventuell hinter dem Pfeil **^**. Am besten von dort in die
+   Taskleiste ziehen, dann ist es immer sichtbar. Ein Klick öffnet die Mini-Ansicht, ein Rechtsklick das Menü.
+
+### macOS
+
+1. Die `.dmg` öffnen und sout in **Programme** ziehen.
+2. sout ist nicht von Apple signiert, deshalb blockiert macOS den ersten Start:
+   - sout einmal öffnen; macOS meldet, dass es nicht geöffnet werden kann. Mit „Fertig“ schließen.
+   - **Systemeinstellungen → Datenschutz & Sicherheit**, ganz nach unten scrollen, bei sout auf **„Dennoch öffnen“**
+     klicken und mit dem Passwort bestätigen.
+   - Bei älteren macOS-Versionen geht auch: Rechtsklick auf sout → Öffnen → Öffnen.
+3. Das Symbol sitzt **oben rechts in der Menüleiste**. Ist etwas in den nächsten 24 Stunden fällig, steht die Anzahl
+   daneben. Tastenkürzel heißen auf dem Mac Cmd statt Strg.
+
+### Linux (Fedora, GNOME)
+
+1. Für das Symbol oben in der Leiste braucht GNOME die Erweiterung „AppIndicator and KStatusNotifierItem Support“.
+   Im Terminal (Aktivitäten → „Terminal“):
+   ```sh
+   sudo dnf install gnome-shell-extension-appindicator fuse-libs
+   ```
+   Danach einmal ab- und wieder anmelden und die Erweiterung einschalten:
+   ```sh
+   gnome-extensions enable appindicatorsupport@rgcjonas.gmail.com
+   ```
+   (`fuse-libs` braucht das AppImage zum Starten.)
+2. **AppImage:** die Datei an einen festen Ort legen, z. B. einen Ordner `~/Programme`. Rechtsklick → Eigenschaften →
+   „Als Programm ausführen“ einschalten, dann mit Doppelklick starten. Nicht mehr verschieben, sonst findet der
+   Autostart sie nicht (ein Start von Hand repariert das).
+3. **Oder RPM:** `sudo dnf install ./sout-…-x86_64.rpm` im Download-Ordner. Danach startet sout aus der App-Übersicht
+   oder mit `sout`.
+4. Ein Klick aufs Symbol öffnet das Menü und gleich die Mini-Ansicht dazu. Abhaken von „Mini-Ansicht“ im Menü
+   schließt sie wieder. (GNOME öffnet bei einem Klick immer das Menü, sout hört mit, wann das passiert. Ein
+   Doppelklick öffnet oder schließt nur die Mini-Ansicht.)
+
+### Überall gleich
+
+- **Erster Start:** Unter Einstellungen trägst du die TISS-Kalender-URL ein, unter Abgaben meldest du dich bei TUWEL an.
+- **Autostart:** in der App unter Einstellungen oder im Menü des Symbols.
+- **Schließen** beendet sout nicht: Das Hauptfenster wird zur Mini-Ansicht beim Symbol, ein Klick daneben schickt sie
+  ins Symbol (in den Einstellungen abschaltbar). Ganz beenden mit Strg+Q (Mac: Cmd+Q) oder „Beenden“ im Menü.
+
+## Aktualisieren
+
+sout schaut alle sechs Stunden auf GitHub nach einer neuen Version. **Deine Daten bleiben bei jedem Update erhalten:**
+Einstellungen, Zugänge, eigene Termine und Notizen liegen außerhalb des Programms (siehe
+[Wo liegen die Daten?](#wo-liegen-die-daten)). Welche Version du hast und ob es eine neue gibt, steht unter
+Einstellungen → Info → Updates.
+
+### Windows und Linux (AppImage): von selbst
+
+Du musst nichts tun. sout lädt die neue Version im Hintergrund und installiert sie, wenn du sout das nächste Mal
+beendest. Eine Benachrichtigung sagt, wenn sie bereit ist. Wer nicht warten will: Einstellungen → Info → Updates →
+**„Jetzt neu starten“**. Unter Windows kann dabei die Warnung „unbekannte App“ kommen: Weitere Informationen →
+Trotzdem ausführen.
+
+### macOS: von Hand, in einer Minute
+
+Ohne kostenpflichtige Apple-Signatur darf sich sout auf dem Mac nicht selbst ersetzen. sout sagt dir aber Bescheid:
+eine Benachrichtigung „Neue Version von sout“ und unter Einstellungen → Info → Updates der Knopf **„So aktualisierst du“**.
+Dann:
+
+1. sout ganz beenden: Cmd+Q oder im Menü des Symbols „Beenden“.
+2. Auf der [Releases-Seite](https://github.com/MentorDerGrosse/sout/releases/latest) die neue `.dmg` herunterladen
+   (Apple-Chip: `…-mac-arm64.dmg`, Intel: `…-mac-x64.dmg`).
+3. Die `.dmg` öffnen, sout in **Programme** ziehen und **„Ersetzen“** wählen.
+4. sout starten. Weil die neue Fassung wieder nicht signiert ist, blockiert macOS den ersten Start erneut:
+   Systemeinstellungen → Datenschutz & Sicherheit → **„Dennoch öffnen“**.
+5. Fertig. Autostart, Einstellungen und Zugänge bleiben, wie sie waren.
+
+### Linux (RPM): von Hand
+
+sout sagt Bescheid wie auf dem Mac. Dann die neue `.rpm` von der Releases-Seite laden und im Download-Ordner:
+```sh
+sudo dnf install ./sout-…-x86_64.rpm
+```
+Danach sout beenden und neu starten. (Wer das nicht jedes Mal machen will: das AppImage aktualisiert sich selbst.)
+
+## Selbst bauen
+
+Statt die fertigen Dateien herunterzuladen, kannst du sout auch selbst bauen, z. B. um den neuesten Stand vor der
+nächsten Version zu haben. Das klingt schwieriger, als es ist: Du tippst ein paar Befehle in ein Terminal, den Rest
+erledigt der Computer. Einmal einrichten dauert etwa 15 Minuten, danach geht jedes Update in wenigen Minuten (siehe
+[Selbst gebaut aktualisieren](#selbst-gebaut-aktualisieren)).
 
 **Was du brauchst:** [Node.js 22 (LTS)](https://nodejs.org) mit npm und [Git](https://git-scm.com). Wie du sie
 installierst, steht unten beim jeweiligen System.
@@ -116,23 +224,15 @@ Ohne Paket geht es auch direkt aus dem Projektordner, siehe
 5. Das Symbol sitzt **oben rechts in der Menüleiste**. Ist etwas in den nächsten 24 Stunden fällig, steht die
    Anzahl daneben. Tastenkürzel heißen auf dem Mac Cmd statt Strg.
 
-### Fertige Pakete von GitHub bauen lassen
+### Pakete von GitHub bauen lassen
 
 Unter **Actions → „Bauen & testen“ → Run workflow** baut GitHub sout auf echten Linux-, Windows- und Mac-Rechnern,
 lässt dort den Testlauf laufen und legt Installer und Screenshots zum Herunterladen ab (unten auf der Seite des Laufs).
 Das braucht einen GitHub-Zugang mit Rechten am Repository.
 
-### Überall gleich
+### Selbst gebaut aktualisieren
 
-- **Erster Start:** sout fragt nach nichts. Unter Einstellungen trägst du die TISS-Kalender-URL ein, unter
-  Abgaben meldest du dich bei TUWEL an.
-- **Autostart:** in der App unter Einstellungen oder im Menü des Symbols
-- **Schließen** beendet sout nicht: Das Hauptfenster wird zur Mini-Ansicht beim Symbol, ein Klick daneben schickt sie
-  ins Symbol (in den Einstellungen abschaltbar). Ganz beenden mit Strg+Q (Mac: Cmd+Q) oder „Beenden“ im Menü.
-
-## Aktualisieren
-
-Eine neue Version holst du dir so wie bei der Installation: neuen Stand herunterladen, neu bauen, neu installieren.
+Eine neue Version holst du dir so wie beim ersten Bauen: neuen Stand herunterladen, neu bauen, neu installieren.
 **Deine Daten bleiben dabei erhalten:** Einstellungen, Zugänge, eigene Termine und Notizen liegen außerhalb des
 Programms (siehe [Wo liegen die Daten?](#wo-liegen-die-daten)). Welche Version du hast, steht unter Einstellungen → Info.
 
@@ -273,6 +373,13 @@ Notizen sind normale Markdown-Dateien in einem Ordner, den du beim ersten Öffne
 - **Verknüpft:** Im Kalender legt „Mitschrift anlegen“ die Notiz für genau diese Vorlesung an (mit Zeit und Raum),
   bei Abgaben „Notizen anlegen“ eine für das Übungsblatt. Läuft gerade eine Vorlesung, steht sie oben in der Liste.
 - **Tags:** `#prüfung` irgendwo im Text; die Suche findet sie mit `#prüfung`.
+- **Bilder:** Ein Bild in der Zwischenablage (z. B. ein Screenshot) mit Strg+V (Mac: Cmd+V) einfügen. Es landet im
+  Ordner `Bilder` neben der Notiz.
+- **Links zwischen Notizen:** `[[Zusammenfassung]]` oder `[[Zusammenfassung|anderer Text]]`. Nach `[[` schlägt der Editor
+  die Notizen vor. Gibt es die Notiz noch nicht, ist der Link grau und ein Klick legt sie an.
+- **Als PDF:** das Symbol mit dem Pfeil in der Notizleiste. Die Notiz kommt so wie in der Vorschau heraus, immer hell.
+- **TUWEL-Unterlagen:** Mit TUWEL-Verbindung kommen die Dateien deiner Kurse alle sechs Stunden in den Ordner
+  `Unterlagen` des Fachs. Was du dort löschst, kommt nicht wieder. Abschaltbar unter Einstellungen → Notizen.
 - Ändert ein anderes Programm eine offene Notiz, zeigt sout die neue Fassung. Hast du gleichzeitig in sout etwas
   geändert, fragt es nach, statt etwas zu überschreiben.
 
@@ -296,6 +403,10 @@ Unter Linux in `~/.config/sout/`, unter Windows in `%APPDATA%\sout\`, unter macO
 | `~/.config/sout/events.json` | eigene Termine (Lerngruppe, Lernblöcke …) |
 | `~/.config/sout/changes.json` | Neuigkeiten der letzten zwei Wochen (Raumwechsel, neue Aufgaben, Bewertungen …) |
 | `~/.config/sout/exams.json` | Prüfungstermine und Anmeldefristen von den TISS-Seiten deiner LVAs; was du mit „Brauche ich nicht“ ausgeblendet hast |
+| `~/.config/sout/courseinfo.json` | ECTS und TUWEL-Link je LVA, von ihrer TISS-Seite |
+| `~/.config/sout/studies.json` | ECTS- und Notenübersicht mit deinen eingetragenen Noten |
+| `~/.config/sout/tuwel-extras.json` | Ankündigungen, Kreuzerlübungen, Termine und Bewertungen aus TUWEL |
+| `~/.config/sout/materials.json` | welche TUWEL-Dateien schon im Notizordner liegen |
 | `~/.config/autostart/sout.desktop` | nur unter Linux und nur wenn Autostart an ist (Windows/macOS: Anmeldeobjekte des Systems) |
 
 ## Startschalter: XWayland und Deutsch (Linux)

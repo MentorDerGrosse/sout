@@ -442,6 +442,18 @@ export interface SearchHit {
   count: number
 }
 
+/** New versions from the GitHub releases. */
+export interface UpdateState {
+  current: string
+  /** Newest version found; null if not known (yet). */
+  latest: string | null
+  /** available: newer version, to install by hand (macOS, RPM); ready: downloaded, installs on quit. */
+  status: 'idle' | 'checking' | 'downloading' | 'available' | 'ready'
+  /** This installation updates itself (Windows installer, Linux AppImage). */
+  automatic: boolean
+  error: string | null
+}
+
 export interface SoutApi {
   getInfo(): Promise<AppInfo>
   getSettings(): Promise<Settings>
@@ -482,6 +494,13 @@ export interface SoutApi {
   addStudyCourse(key: string, semester: string): Promise<Result<StudiesData>>
   removeStudyCourse(key: string, semester: string): Promise<StudiesData>
   onStudiesChanged(listener: () => void): () => void
+  getUpdateState(): Promise<UpdateState>
+  checkForUpdates(): Promise<UpdateState>
+  /** Quits and installs the downloaded version (Windows, AppImage). */
+  installUpdate(): void
+  /** Opens the download page or the update guide. */
+  openUpdateHelp(): void
+  onUpdateChanged(listener: () => void): () => void
   getTuwelExtras(): Promise<TuwelExtras>
   onTuwelExtrasChanged(listener: () => void): () => void
   getExams(): Promise<ExamsData>
@@ -568,6 +587,11 @@ export const IPC = {
   addStudyCourse: 'sout:add-study-course',
   removeStudyCourse: 'sout:remove-study-course',
   studiesChanged: 'sout:studies-changed',
+  getUpdateState: 'sout:get-update-state',
+  checkForUpdates: 'sout:check-for-updates',
+  installUpdate: 'sout:install-update',
+  openUpdateHelp: 'sout:open-update-help',
+  updateChanged: 'sout:update-changed',
   getTuwelExtras: 'sout:get-tuwel-extras',
   tuwelExtrasChanged: 'sout:tuwel-extras-changed',
   getExams: 'sout:get-exams',
