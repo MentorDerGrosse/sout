@@ -53,7 +53,42 @@ md.renderer.rules.image = (tokens, idx, options, env, self) => {
   return renderImage(tokens, idx, options, env, self)
 }
 
+/** [[Notiz]] or [[Notiz|Text]]: a link to another note, by its name. */
+md.inline.ruler.before('link', 'wikilink', (state, silent) => {
+  const match = /^\[\[([^[\]|\n]+?)(?:\|([^[\]\n]+?))?\]\]/.exec(state.src.slice(state.pos))
+  if (!match) return false
+  if (!silent) {
+    const target = match[1]!.trim()
+    const open = state.push('link_open', 'a', 1)
+    open.attrSet('href', '#')
+    open.attrSet('class', 'wikilink')
+    open.attrSet('data-note', target)
+    state.push('text', '', 0).content = (match[2] ?? match[1]!).trim()
+    state.push('link_close', 'a', -1)
+  }
+  state.pos += match[0].length
+  return true
+})
+
+/** Links to notes that don't exist yet look different (a click creates them). */
+const renderLinkOpen = md.renderer.rules.link_open ?? ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options))
+md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
+  const token = tokens[idx]!
+  const target = token.attrGet('data-note')
+  const names = env?.['noteNames'] as Set<string> | undefined
+  if (target && names && !names.has(noteKey(String(target)))) token.attrJoin('class', 'missing')
+  return renderLinkOpen(tokens, idx, options, env, self)
+}
+
+/** How [[links]] are matched: by name, without ".md", case and surrounding spaces ignored. */
+export function noteKey(name: string): string {
+  return name
+    .replace(/\.(md|markdown|txt)$/i, '')
+    .trim()
+    .toLowerCase()
+}
+
 /** HTML for a note; `dir` is the note's folder, relative links and images start there. */
-export function renderMarkdown(source: string, dir: string): string {
-  return md.render(source, { dir })
+export function renderMarkdown(source: string, dir: string, noteNames?: Set<string>): string {
+  return md.render(source, { dir, noteNames })
 }

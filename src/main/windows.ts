@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Notification, nativeTheme, screen, shell, type Rectangle } from 'electron'
+import { app, BrowserWindow, ipcMain, Notification, nativeTheme, screen, shell, type IpcMainEvent, type Rectangle } from 'electron'
 import { fileURLToPath } from 'node:url'
 import { DARK_PALETTES, LIGHT_PALETTES, palette } from '../shared/themes'
 import { IPC, type View } from '../shared/types'
@@ -246,6 +246,32 @@ export function hideMini(): void {
   miniWindow.hide()
   miniHiddenAt = Date.now()
   for (const listener of miniListeners) listener()
+}
+
+/**
+ * A note as PDF: a hidden window renders it like the preview (page "print:<path>", always light),
+ * says when formulas and pictures are there, then Chromium prints it.
+ */
+export async function printNote(path: string): Promise<Buffer> {
+  const win = new BrowserWindow({ show: false, width: 900, height: 1200, webPreferences: { preload: preloadPath(), sandbox: true, contextIsolation: true } })
+  let onReady: ((event: IpcMainEvent) => void) | null = null
+  try {
+    const ready = new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('Die Notiz ließ sich nicht für den Druck aufbereiten.')), 20_000)
+      onReady = (event) => {
+        if (event.sender !== win.webContents) return
+        clearTimeout(timer)
+        resolve()
+      }
+      ipcMain.on(IPC.printReady, onReady)
+    })
+    load(win, `print:${encodeURIComponent(path)}`)
+    await ready
+    return await win.webContents.printToPDF({ pageSize: 'A4', printBackground: true, margins: { top: 0.6, bottom: 0.6, left: 0.7, right: 0.7 } })
+  } finally {
+    if (onReady) ipcMain.removeListener(IPC.printReady, onReady)
+    win.destroy()
+  }
 }
 
 /** Where the tray icon sits, for texts. */

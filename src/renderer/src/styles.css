@@ -3248,3 +3248,54 @@ select.input {
   color: var(--text-muted);
   font-size: 12px;
 }
+
+/* ---------- Links between notes ---------- */
+
+.markdown a.wikilink {
+  text-decoration-style: dotted;
+}
+
+.markdown a.wikilink.missing {
+  color: var(--text-muted);
+}
+
+.note-exported {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 16px 8px;
+}
+
+.note-exported .callout {
+  flex: 1;
+}
+
+/* ---------- "Als PDF speichern": the print page, always light ---------- */
+
+:root[data-print] {
+  color-scheme: light;
+  --bg: #fff;
+  --surface: #fff;
+  --surface-muted: #f3f4f6;
+  --border: #d9dce2;
+  --text: #111318;
+  --text-muted: #555b66;
+  --accent: #2456c8;
+  --accent-soft: rgba(36, 86, 200, 0.1);
+  --code-keyword: #b4296f;
+  --code-string: #1d7a3a;
+  --code-number: #b35a00;
+  --code-function: #2d5fcf;
+  --code-type: #7c4bd6;
+}
+
+body.is-print {
+  overflow: visible;
+  background: #fff;
+  user-select: text;
+}
+
+.print-note {
+  max-width: none;
+  padding: 0;
+}

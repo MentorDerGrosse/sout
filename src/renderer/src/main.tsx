@@ -3,14 +3,16 @@ import { createRoot } from 'react-dom/client'
 import { isView, type Settings } from '../../shared/types'
 import App from './App'
 import Mini from './Mini'
+import { PrintNote } from './notes/PrintNote'
 import './styles.css'
 
 // Both windows load this page; the URL hash says which one this is and what the main window
 // shows first: "mini", "calendar", "notes:<path of a note>".
 const [first = '', ...rest] = window.location.hash.slice(1).split(':')
 const isMini = first === 'mini'
+const isPrint = first === 'print'
 const note = rest.length > 0 ? decodeURIComponent(rest.join(':')) : undefined
-document.body.classList.add(isMini ? 'is-mini' : 'is-main')
+document.body.classList.add(isMini ? 'is-mini' : isPrint ? 'is-print' : 'is-main')
 
 // Files dropped anywhere else would make the window navigate away to them.
 for (const type of ['dragover', 'drop']) window.addEventListener(type, (event) => event.preventDefault())
@@ -28,6 +30,8 @@ void window.sout
   .then(applyPalettes)
   .finally(() => {
     createRoot(document.getElementById('root')!).render(
-      <StrictMode>{isMini ? <Mini /> : <App initialView={isView(first) ? first : 'today'} initialNote={note} />}</StrictMode>
+      <StrictMode>
+        {isPrint && note ? <PrintNote path={note} /> : isMini ? <Mini /> : <App initialView={isView(first) ? first : 'today'} initialNote={note} />}
+      </StrictMode>
     )
   })

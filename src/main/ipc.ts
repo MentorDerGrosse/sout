@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import { writeFileSync } from 'node:fs'
 import { IPC, isView, type AppInfo, type CoursePatch, type NewNote, type Result, type TodoInput } from '../shared/types'
 import { autostartFile, isAutostartEnabled, setAutostart } from './autostart'
 import { calendarChanged, calendarData, clearCalendar, syncCalendar, updateCourse } from './calendar'
@@ -6,8 +7,8 @@ import { changes, dismissChange } from './changes'
 import { dismissExam, examsData, syncExams } from './exams'
 import { tuwelExtras } from './tuwelExtras'
 import { addStudyCourse, removeStudyCourse, studiesData, updateStudyCourse } from './studies'
-import { chooseNotesDir, createNote, importPdfs, moveNote, noteForEvent, noteForTask, quickNote, setupNotes } from './courseNotes'
-import { flushNote, notesData, readNote, renameNote, searchNotes, showInFolder, trashNote, writeNote } from './notes'
+import { chooseNotesDir, createLinkedNote, createNote, importPdfs, moveNote, noteForEvent, noteForTask, quickNote, setupNotes } from './courseNotes'
+import { flushNote, notesData, readNote, renameNote, resolveNote, saveNoteImage, searchNotes, showInFolder, trashNote, writeNote } from './notes'
 import { addOwnEvent, deleteOwnEvent, updateOwnEvent } from './ownEvents'
 import { launcherPath } from './paths'
 import { clearSecret, getSecret, secretsStatus, setSecret } from './secrets'
@@ -16,7 +17,7 @@ import { trayHostAvailable, windowSystem } from './system'
 import { addTodo, deleteTodo, loginTuwel, logoutTuwel, setTaskDone, syncTasks, tasksData } from './tasks'
 import { parseTissToken, testTissFeed } from './tiss'
 import { refreshTrayMenu } from './tray'
-import { applyTheme, broadcast, hideMini, showMain } from './windows'
+import { applyTheme, broadcast, hideMini, printNote, showMain } from './windows'
 
 const ok = <T>(value: T): Result<T> => ({ ok: true, value })
 const fail = (error: unknown): Result<never> => ({
@@ -224,6 +225,28 @@ function registerNotesIpc(): void {
   ipcMain.handle(IPC.noteForEvent, (_event, id: unknown) => attempt(() => noteForEvent(text(id))))
   ipcMain.handle(IPC.noteForTask, (_event, id: unknown) => attempt(() => noteForTask(text(id))))
   ipcMain.handle(IPC.quickNote, (_event, content: unknown) => attempt(() => quickNote(text(content))))
+  ipcMain.handle(IPC.saveNoteImage, (_event, path: unknown, data: unknown, type: unknown) =>
+    attempt(() => {
+      if (!(data instanceof Uint8Array)) throw new Error('Kein Bild.')
+      return saveNoteImage(text(path), data, text(type))
+    })
+  )
+  ipcMain.handle(IPC.createLinkedNote, (_event, dir: unknown, title: unknown) => attempt(() => createLinkedNote(text(dir), text(title))))
+  ipcMain.handle(IPC.exportNotePdf, (event, path: unknown) =>
+    attempt(async () => {
+      const note = text(path)
+      const options = {
+        title: 'Notiz als PDF speichern',
+        defaultPath: `${resolveNote(note).replace(/\.(md|markdown|txt)$/i, '')}.pdf`,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }]
+      }
+      const parent = BrowserWindow.fromWebContents(event.sender)
+      const choice = parent ? await dialog.showSaveDialog(parent, options) : await dialog.showSaveDialog(options)
+      if (choice.canceled || !choice.filePath) return null
+      writeFileSync(choice.filePath, await printNote(note))
+      return choice.filePath
+    })
+  )
   ipcMain.handle(IPC.renameNote, (_event, path: unknown, name: unknown) => attempt(() => renameNote(text(path), text(name))))
   ipcMain.handle(IPC.moveNote, (_event, path: unknown, courseKey: unknown) => attempt(() => moveNote(text(path), stringOrNull(courseKey))))
   ipcMain.handle(IPC.trashNote, (_event, path: unknown) =>

@@ -7,9 +7,9 @@ import { IPC, type View } from '../shared/types'
 import { autostartEntry } from './autostart'
 import { calendarChanged, calendarData, startCalendarSync, syncCalendar } from './calendar'
 import { changes, startChanges } from './changes'
-import { importPdfs, noteForEvent, noteForTask, quickNote, setupNotes } from './courseNotes'
+import { createLinkedNote, importPdfs, noteForEvent, noteForTask, quickNote, setupNotes } from './courseNotes'
 import { examsData, startExamSync, syncExams } from './exams'
-import { notesData, searchNotes, startNotesWatch, writeNote } from './notes'
+import { notesData, saveNoteImage, searchNotes, startNotesWatch, writeNote } from './notes'
 import { handleNotesScheme } from './notesProtocol'
 import { addOwnEvent } from './ownEvents'
 import { refreshUrgent } from './reminders'
@@ -26,7 +26,7 @@ import { getSettings, updateSettings } from './settings'
 import { trayHostAvailable, windowSystem } from './system'
 import { fetchTissFeed } from './tiss'
 import { createTray, trayUrgent } from './tray'
-import { applyTheme, broadcast, createMainWindow, createMiniWindow, isMiniVisible, miniTakesOver, setOnMainClosed } from './windows'
+import { applyTheme, broadcast, printNote, createMainWindow, createMiniWindow, isMiniVisible, miniTakesOver, setOnMainClosed } from './windows'
 
 // `--smoke-test=<dir>`: starts everything without showing a window, takes screenshots of the views,
 // writes report.json and quits. Uses its own data folder and no keyring, so it also works on an
@@ -458,6 +458,7 @@ def quadrat(n):
 ## Offene Fragen
 
 - Warum konvergiert die Reihe?
+- Siehe [[Zusammenfassung]] und [[Formelsammlung]]
 `
 
 /** Notes: setup page, a lecture note with formulas, the PDF next to it, search, new-note dialog, quick note. */
@@ -546,8 +547,37 @@ async function smokeNotes(main: BrowserWindow, mini: BrowserWindow, dir: string,
   await js(`[...document.querySelectorAll('.task-body')].find((b) => b.getAttribute('aria-expanded') !== 'true')?.click()`)
   await delay(1500)
   shots['deadlines-note'] = await screenshot(main, dir, 'deadlines-note')
+  ;(report['notes'] as Record<string, unknown>)['extras'] = await smokeNoteExtras(main, dir, openPath, shots)
   ;(report['notes'] as Record<string, unknown>)['editing'] = await smokeEditing(main, join(setup.root!, openPath), openPath)
   return shots
+}
+
+/** A pasted picture, [[links]] (one leads to a new note), the note as PDF. */
+async function smokeNoteExtras(main: BrowserWindow, dir: string, path: string, shots: Record<string, string>): Promise<Record<string, unknown>> {
+  const js = (code: string): Promise<unknown> => main.webContents.executeJavaScript(code)
+  // A 1×1 PNG stands in for a screenshot.
+  const png = Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==', 'base64'))
+  const image = saveNoteImage(path, png, 'image/png')
+  const linked = createLinkedNote(path.slice(0, path.lastIndexOf('/')), 'Formelsammlung')
+  main.webContents.send(IPC.navigate, 'notes', path)
+  await delay(1500)
+  await js(`[...document.querySelectorAll('.segmented button')].find((b) => b.title === 'Lesen')?.click()`)
+  await delay(800)
+  const missing = await js(`[...document.querySelectorAll('.markdown a.wikilink.missing')].map((a) => a.textContent)`)
+  await js('document.querySelector(".note-preview")?.scrollTo(0, 1e6)')
+  await delay(800)
+  shots['notes-links'] = await screenshot(main, dir, 'notes-links')
+  await js(`[...document.querySelectorAll('.segmented button')].find((b) => b.title === 'Geteilt')?.click()`)
+  const pdf = await printNote(path)
+  writeFileSync(join(dir, 'notiz.pdf'), pdf)
+  return {
+    image,
+    imageExists: image.startsWith('Bilder/Bild-'),
+    linked,
+    // [[Zusammenfassung]] leads nowhere yet, [[Formelsammlung]] does now.
+    missingLinks: missing,
+    pdfPages: (pdf.toString('latin1').match(/\/Type\s*\/Page\b/g) ?? []).length
+  }
 }
 
 /** Typing saves by itself, changes from outside show up, conflicts are caught, closing the window saves. Closes the main window. */

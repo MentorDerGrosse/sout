@@ -503,6 +503,14 @@ export interface SoutApi {
   noteForEvent(eventId: string): Promise<Result<string>>
   /** The note for an assignment – opened or created. */
   noteForTask(taskId: string): Promise<Result<string>>
+  /** A pasted picture, saved next to the note; returns its path relative to the note's folder. */
+  saveNoteImage(path: string, data: Uint8Array, type: string): Promise<Result<string>>
+  /** Creates the note a [[link]] points to, in folder `dir`. */
+  createLinkedNote(dir: string, title: string): Promise<Result<string>>
+  /** Saves the note as PDF (asks where); returns the file or null if cancelled. */
+  exportNotePdf(path: string): Promise<Result<string | null>>
+  /** The print page tells it's ready to be printed. */
+  printReady(): void
   /** Saves a quick note into the Inbox. */
   quickNote(text: string): Promise<Result<string>>
   renameNote(path: string, name: string): Promise<Result<string>>
@@ -574,6 +582,10 @@ export const IPC = {
   noteForEvent: 'sout:note-for-event',
   noteForTask: 'sout:note-for-task',
   quickNote: 'sout:quick-note',
+  saveNoteImage: 'sout:save-note-image',
+  createLinkedNote: 'sout:create-linked-note',
+  exportNotePdf: 'sout:export-note-pdf',
+  printReady: 'sout:print-ready',
   renameNote: 'sout:rename-note',
   moveNote: 'sout:move-note',
   trashNote: 'sout:trash-note',

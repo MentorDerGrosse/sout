@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import type { EditorView } from '@codemirror/view'
 import {
   Bold,
   Code,
   Columns2,
   Eye,
+  FileDown,
   FolderOpen,
   Heading2,
   Italic,
@@ -24,6 +25,7 @@ import {
 import { INBOX } from '../../../shared/notes'
 import type { CalendarData, Course, NoteDoc, NotesData, SearchHit, View } from '../../../shared/types'
 import { Callout, ResizeHandle } from '../components'
+import { noteKey } from '../lib/markdown'
 import { courseMap, eventLabel, useCalendar } from '../lib/calendar'
 import {
   courseDirOf,
@@ -197,6 +199,8 @@ function Workspace(props: { notes: NotesData; calendar: CalendarData | null; req
   const [dropping, setDropping] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [exported, setExported] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
 
   // What saving needs lives in refs, so editor callbacks and timers always see the latest state.
   const current = useRef<{ path: string; base: number | null } | null>(null)
@@ -311,6 +315,50 @@ function Workspace(props: { notes: NotesData; calendar: CalendarData | null; req
     },
     [expandTo]
   )
+
+  // All notes, for [[links]]: what exists, and what "[[" offers.
+  const allNotes = useMemo(() => filesIn(notes.tree).filter((node) => node.kind === 'note'), [notes])
+  const noteNames = useMemo(() => new Set(allNotes.map((node) => noteKey(node.name))), [allNotes])
+  const linkNames = useMemo(() => [...new Set(allNotes.map((node) => node.name.replace(/\.(md|markdown|txt)$/i, '')))].sort((a, b) => a.localeCompare(b, 'de')), [allNotes])
+
+  /** [[Name]]: the note of that name – in the same course if there are several –, or a new one next to this note. */
+  const followLink = useCallback(
+    async (target: string) => {
+      const key = noteKey(target)
+      const matches = allNotes.filter((node) => noteKey(node.name) === key)
+      const here = current.current ? courseDirOf(current.current.path) : null
+      const match = matches.find((node) => here && node.path.startsWith(`${here}/`)) ?? matches[0]
+      if (match) {
+        void openNote(match.path)
+        return
+      }
+      const dir = current.current ? dirOf(current.current.path) : INBOX
+      const result = await window.sout.createLinkedNote(dir, target)
+      if (result.ok) void openNote(result.value, (view) => view.dispatch({ selection: { anchor: view.state.doc.length } }))
+      else setProblem(result.error)
+    },
+    [allNotes, openNote]
+  )
+
+  /** A picture from the clipboard goes into "Bilder" next to the note. */
+  const pasteImage = useCallback(async (file: File): Promise<string | null> => {
+    const path = current.current?.path
+    if (!path) return null
+    const result = await window.sout.saveNoteImage(path, new Uint8Array(await file.arrayBuffer()), file.type)
+    if (result.ok) return result.value
+    setProblem(result.error)
+    return null
+  }, [])
+
+  const exportPdf = async (): Promise<void> => {
+    const path = current.current?.path
+    if (!path || !(await save())) return
+    setExporting(true)
+    const result = await window.sout.exportNotePdf(path)
+    setExporting(false)
+    if (!result.ok) setProblem(result.error)
+    else if (result.value) setExported(result.value)
+  }
 
   // Cursor placement and the like, once the editor shows the new note.
   useEffect(() => {
@@ -643,6 +691,9 @@ function Workspace(props: { notes: NotesData; calendar: CalendarData | null; req
                       ))}
                   </select>
                 )}
+                <button type="button" className="icon-button" title="Als PDF speichern" aria-label="Als PDF speichern" disabled={exporting} onClick={() => void exportPdf()}>
+                  <FileDown size={16} />
+                </button>
                 <button type="button" className="icon-button" title="Im Dateimanager zeigen" aria-label="Im Dateimanager zeigen" onClick={() => window.sout.showNoteInFolder(doc.path)}>
                   <FolderOpen size={16} />
                 </button>
@@ -719,6 +770,14 @@ function Workspace(props: { notes: NotesData; calendar: CalendarData | null; req
             </div>
           </Callout>
         )}
+        {exported && (
+          <div className="note-exported">
+            <Callout kind="ok" title={`Als PDF gespeichert: ${exported}`} />
+            <button type="button" className="icon-button" aria-label="Schließen" onClick={() => setExported(null)}>
+              <X size={14} />
+            </button>
+          </div>
+        )}
         {problem && saveState !== 'conflict' && (
           <Callout kind="error" title={problem}>
             {saveState === 'error' && (
@@ -742,6 +801,8 @@ function Workspace(props: { notes: NotesData; calendar: CalendarData | null; req
                   if (preview) preview.scrollTop = ratio * (preview.scrollHeight - preview.clientHeight)
                 }}
                 viewRef={viewRef}
+                noteNames={linkNames}
+                onPasteImage={pasteImage}
               />
             </div>
           )}
@@ -752,6 +813,8 @@ function Workspace(props: { notes: NotesData; calendar: CalendarData | null; req
                 content={content}
                 dir={dirOf(doc.path)}
                 scrollRef={previewRef}
+                noteNames={noteNames}
+                onWikiLink={(target) => void followLink(target)}
                 onToggleTask={(line) => viewRef.current && toggleTask(viewRef.current, line)}
                 onOpenNote={(path) => void openNote(path)}
                 onOpenPdf={openPdf}

@@ -367,6 +367,10 @@ const expectedDeadlines = ['345.678 group Gruppe 1+Gruppe 2 open', '345.678 grou
 if (JSON.stringify(report.deadlines) !== JSON.stringify(expectedDeadlines)) problems.push(`Fristen: ${JSON.stringify(report.deadlines)} statt ${JSON.stringify(expectedDeadlines)}`)
 // An assignment, an exam registration and a group registration, each ending within 20 hours.
 if (report.trayUrgent !== 3) problems.push(`Tray: ${report.trayUrgent} statt 3 Fristen in den nächsten 24 Stunden`)
+const noteExtras = report.notes?.extras
+if (!noteExtras?.imageExists) problems.push(`Bild einfügen: ${JSON.stringify(noteExtras?.image)}`)
+if (JSON.stringify(noteExtras?.missingLinks) !== '["Zusammenfassung"]') problems.push(`[[Links]]: ${JSON.stringify(noteExtras?.missingLinks)} statt nur „Zusammenfassung“ als fehlend`)
+if (!(noteExtras?.pdfPages >= 1)) problems.push(`PDF-Export: ${noteExtras?.pdfPages} Seiten`)
 if (report.notes?.protocol?.pdf !== 200 || report.notes?.protocol?.outside !== 404) problems.push(`sout-file: ${JSON.stringify(report.notes?.protocol)}`)
 // Linux with a tray host (GNOME): the mini view opens with the tray menu and closes from it.
 if (report.trayMenu && typeof report.trayMenu === 'object') {

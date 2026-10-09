@@ -1,6 +1,7 @@
 import { useEffect, useRef, type MutableRefObject } from 'react'
 import { minimalSetup } from 'codemirror'
 import { indentWithTab } from '@codemirror/commands'
+import { autocompletion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
@@ -210,6 +211,16 @@ const baseExtensions = [
   placeholder('Schreib los … Formeln mit $…$, z. B. $a^2 + b^2 = c^2$')
 ]
 
+function noteCompletions(context: CompletionContext, names: string[]): CompletionResult | null {
+  const typed = context.matchBefore(/\[\[[^[\]|\n]*$/)
+  if (!typed) return null
+  return {
+    from: typed.from + 2,
+    options: names.map((name) => ({ label: name, apply: `${name}]]` })),
+    validFor: /^[^[\]|\n]*$/
+  }
+}
+
 export interface EditorProps {
   /** A new key loads `content` as a fresh document (another note, or the version from disk). */
   docKey: string
@@ -219,6 +230,10 @@ export interface EditorProps {
   /** Scroll position 0…1, for the preview next to it. */
   onScroll: (ratio: number) => void
   viewRef: MutableRefObject<EditorView | null>
+  /** Names of the other notes, offered after "[[". */
+  noteNames: string[]
+  /** A picture from the clipboard: saved, returns the path for the Markdown (or null). */
+  onPasteImage: (file: File) => Promise<string | null>
 }
 
 export function MarkdownEditor(props: EditorProps) {
@@ -251,6 +266,23 @@ export function MarkdownEditor(props: EditorProps) {
         extensions: [
           baseExtensions,
           keymap.of([{ key: 'Mod-s', run: () => (latest.current.onSave(), true) }]),
+          // "[[" offers the other notes.
+          autocompletion({ override: [(context) => noteCompletions(context, latest.current.noteNames)], icons: false }),
+          EditorView.domEventHandlers({
+            paste: (event, view) => {
+              const file = [...(event.clipboardData?.files ?? [])].find((candidate) => candidate.type.startsWith('image/'))
+              if (!file) return false
+              event.preventDefault()
+              const { from, to } = view.state.selection.main
+              void latest.current.onPasteImage(file).then((path) => {
+                if (!path) return
+                // Angle brackets keep paths with spaces working.
+                const insert = `![](${/\s/.test(path) ? `<${path}>` : path})`
+                view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length } })
+              })
+              return true
+            }
+          }),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) latest.current.onChange(update.state.doc.toString())
           })

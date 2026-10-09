@@ -8,6 +8,9 @@ export function Preview(props: {
   /** Folder of the note: relative links and images start there. */
   dir: string
   scrollRef: RefObject<HTMLDivElement | null>
+  /** Names of all notes (noteKey), for [[links]] that lead nowhere yet. */
+  noteNames: Set<string>
+  onWikiLink: (target: string) => void
   onToggleTask: (line: number) => void
   onOpenNote: (path: string) => void
   onOpenPdf: (path: string) => void
@@ -15,12 +18,18 @@ export function Preview(props: {
 }) {
   // Typing stays smooth: the preview may lag a keystroke behind.
   const content = useDeferredValue(props.content)
-  const html = useMemo(() => renderMarkdown(content, props.dir), [content, props.dir])
+  const html = useMemo(() => renderMarkdown(content, props.dir, props.noteNames), [content, props.dir, props.noteNames])
 
   const onClick = (event: MouseEvent): void => {
     const target = event.target as HTMLElement
     if (target instanceof HTMLInputElement && target.classList.contains('task-checkbox')) {
       props.onToggleTask(Number(target.dataset['line']))
+      return
+    }
+    const wikilink = target.closest('a.wikilink')?.getAttribute('data-note')
+    if (wikilink) {
+      event.preventDefault()
+      props.onWikiLink(wikilink)
       return
     }
     const href = target.closest('a')?.getAttribute('href')
