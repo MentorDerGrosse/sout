@@ -54,5 +54,8 @@ mac:
     - target: zip
       arch: [arm64, x64]
   category: public.app-category.education
-  # Not signed (no Apple developer account): first start via right click → Öffnen.
-  identity: null
+  # No Apple developer account, so no real signature – but ad-hoc signed ("-"): Apple chips refuse to start
+  # an app without any signature and macOS calls it "beschädigt". Without notarization the hardened runtime
+  # only gets in the way. First start: Systemeinstellungen → Datenschutz & Sicherheit → „Dennoch öffnen“.
+  identity: '-'
+  hardenedRuntime: false

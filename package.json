@@ -1,7 +1,7 @@
 {
   "name": "sout",
   "productName": "sout",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Studium an der TU Wien organisieren: TISS-Kalender, TUWEL-Abgaben, Notizen pro Fach",
   "private": true,
   "license": "MIT",
