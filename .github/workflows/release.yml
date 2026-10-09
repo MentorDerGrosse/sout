@@ -15,6 +15,8 @@ permissions:
 jobs:
   build:
     strategy:
+      # One system failing shouldn't cancel the others – their logs help too.
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
