@@ -26,6 +26,8 @@ publish:
 
 linux:
   target: [AppImage, rpm]
+  # The RPM needs a maintainer; without it electron-builder wants an author e-mail – the name is enough.
+  maintainer: MentorDerGrosse
   category: Education
   executableName: sout
   # Started from the app menu: XWayland and German straight away (otherwise sout restarts itself with them).
