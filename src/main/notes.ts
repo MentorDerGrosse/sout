@@ -209,6 +209,45 @@ export function flushNote(path: string, content: string, baseModified: number | 
   }
 }
 
+const IMAGE_TYPES: Record<string, string> = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/gif': '.gif', 'image/webp': '.webp' }
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024
+/** Pasted pictures go into this folder next to the note. */
+const IMAGE_DIR = 'Bilder'
+
+/** A pasted picture: into "Bilder" next to the note. Returns its path relative to the note's folder. */
+export function saveNoteImage(path: string, data: Uint8Array, type: string): string {
+  const note = resolveNote(path)
+  const ext = IMAGE_TYPES[type]
+  if (!ext) throw new Error('Dieses Bildformat kann sout nicht speichern (PNG, JPEG, GIF und WebP gehen).')
+  if (data.byteLength > MAX_IMAGE_BYTES) throw new Error('Das Bild ist zu groß (höchstens 20 MB).')
+  // "Bild-2026-10-09-013045.png" – the time keeps names apart and in order.
+  const stamp = new Date().toISOString().slice(0, 19).replace('T', '-').replace(/:/g, '')
+  const abs = uniquePath(join(dirname(note), IMAGE_DIR), `Bild-${stamp}${ext}`)
+  mkdirSync(dirname(abs), { recursive: true })
+  writeFileSync(abs, data)
+  notesChanged()
+  return `${IMAGE_DIR}/${basename(abs)}`
+}
+
+export function noteFileExists(path: string): boolean {
+  try {
+    return statOrNull(resolveNote(path))?.isFile() ?? false
+  } catch {
+    return false
+  }
+}
+
+/** Writes a file into the notes folder (folders created as needed); returns its path and mtime. */
+export function writeNoteFile(path: string, data: Uint8Array): { path: string; mtime: number } {
+  const abs = resolveNote(path)
+  mkdirSync(dirname(abs), { recursive: true })
+  const temp = join(dirname(abs), `.${basename(abs)}.sout-tmp`)
+  writeFileSync(temp, data)
+  renameSync(temp, abs)
+  notesChanged()
+  return { path: toRel(abs), mtime: statSync(abs).mtimeMs }
+}
+
 /** A new file in a folder of the notes (created if needed); "Name 2.md" if the name is taken. */
 export function createNoteFile(dir: string, name: string, content: string): string {
   const abs = uniquePath(resolveNote(dir), name)

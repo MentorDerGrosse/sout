@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { FolderOpen, KeyRound, LoaderCircle, LogIn, LogOut } from 'lucide-react'
-import { REMINDER_CHOICES, type AppInfo, type Course, type SecretsStatus, type Settings } from '../../../shared/types'
+import { useEffect, useState } from 'react'
+import { Check, Download, FolderOpen, KeyRound, LoaderCircle, LogIn, LogOut, RefreshCw } from 'lucide-react'
+import { DARK_PALETTES, LIGHT_PALETTES, THEME_MODES, type Palette } from '../../../shared/themes'
+import { REMINDER_CHOICES, type AppInfo, type Course, type SecretsStatus, type Settings, type UpdateState } from '../../../shared/types'
 import { Callout, Command, Toggle } from '../components'
 import { syncStatus, useCalendar } from '../lib/calendar'
 import { useAppState } from '../lib/hooks'
@@ -92,6 +93,8 @@ export default function SettingsView() {
         )}
       </section>
 
+      <AppearanceSection settings={settings} />
+
       <section className="section">
         <h2>Zugänge</h2>
         <div className="rows">
@@ -105,19 +108,144 @@ export default function SettingsView() {
 
       <RemindersSection settings={settings} />
 
-      <NotesSection />
+      <NotesSection settings={settings} />
 
       <CoursesSection />
 
       <section className="section">
         <h2>Info</h2>
         <div className="rows">
+          <UpdateRow packaged={info.packaged} />
           <div className="row">
             <InfoList info={info} />
           </div>
         </div>
       </section>
     </>
+  )
+}
+
+/** Light, dark or as the system says – and a colour scheme for each. */
+function AppearanceSection({ settings }: { settings: Settings }) {
+  const update = (patch: Partial<Settings>): void => void window.sout.updateSettings(patch)
+  return (
+    <section className="section">
+      <h2>Erscheinungsbild</h2>
+      <div className="rows">
+        <div className="row">
+          <div className="row-text">
+            <div className="row-title">Hell oder dunkel</div>
+            <div className="row-desc">„Wie das System“ wechselt mit der Hell-/Dunkel-Einstellung deines Systems.</div>
+          </div>
+          <div className="segmented" role="radiogroup" aria-label="Hell oder dunkel">
+            {THEME_MODES.map((mode) => (
+              <button
+                key={mode.id}
+                type="button"
+                role="radio"
+                aria-checked={settings.themeMode === mode.id}
+                className={settings.themeMode === mode.id ? 'active' : undefined}
+                onClick={() => update({ themeMode: mode.id })}
+              >
+                {mode.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <PaletteRow title="Helles Farbschema" hint="Gilt, wenn sout hell ist." palettes={LIGHT_PALETTES} value={settings.lightPalette} onChange={(id) => update({ lightPalette: id })} />
+        <PaletteRow title="Dunkles Farbschema" hint="Gilt, wenn sout dunkel ist." palettes={DARK_PALETTES} value={settings.darkPalette} onChange={(id) => update({ darkPalette: id })} />
+      </div>
+    </section>
+  )
+}
+
+function PaletteRow(props: { title: string; hint: string; palettes: Palette[]; value: string; onChange: (id: string) => void }) {
+  return (
+    <div className="row column">
+      <div className="row-text">
+        <div className="row-title">{props.title}</div>
+        <div className="row-desc">{props.hint}</div>
+      </div>
+      <div className="palette-choices" role="radiogroup" aria-label={props.title}>
+        {props.palettes.map((palette) => {
+          const [page, card, accent, text] = palette.swatch
+          const active = props.value === palette.id
+          return (
+            <button
+              key={palette.id}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              className={`palette-card${active ? ' active' : ''}`}
+              onClick={() => props.onChange(palette.id)}
+            >
+              {/* A tiny window in the scheme's colours: page, a card with text, an accent button. */}
+              <span className="palette-preview" style={{ background: page }} aria-hidden="true">
+                <span className="palette-preview-card" style={{ background: card }}>
+                  <span className="palette-preview-line" style={{ background: text }} />
+                  <span className="palette-preview-line short" style={{ background: text }} />
+                  <span className="palette-preview-button" style={{ background: accent }} />
+                </span>
+              </span>
+              <span className="palette-name">
+                {palette.label} {active && <Check size={14} />}
+              </span>
+              <span className="palette-hint">{palette.hint}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/** New versions: Windows and the AppImage install them themselves, elsewhere a hint and the way there. */
+function UpdateRow({ packaged }: { packaged: boolean }) {
+  const [update, setUpdate] = useState<UpdateState | null>(null)
+  useEffect(() => {
+    const load = (): void => void window.sout.getUpdateState().then(setUpdate)
+    load()
+    return window.sout.onUpdateChanged(load)
+  }, [])
+  if (!update) return null
+  const text = !packaged
+    ? 'Aus dem Projektordner gestartet: neue Versionen mit git pull, siehe README.'
+    : update.status === 'ready'
+      ? `sout ${update.latest} ist geladen und wird beim Beenden installiert.`
+      : update.status === 'downloading'
+        ? `sout ${update.latest} wird geladen …`
+        : update.status === 'available'
+          ? `sout ${update.latest} ist da. Auf diesem System aktualisierst du von Hand – die Anleitung zeigt wie.`
+          : update.status === 'checking'
+            ? 'Schaue nach neuen Versionen …'
+            : update.automatic
+              ? 'sout lädt neue Versionen selbst und installiert sie beim Beenden.'
+              : 'sout schaut alle sechs Stunden nach neuen Versionen und sagt Bescheid.'
+  return (
+    <div className="row">
+      <div className="row-text">
+        <div className="row-title">Updates · Version {update.current}</div>
+        <div className="row-desc">
+          {text}
+          {update.error && packaged && ` (Zuletzt: ${update.error})`}
+        </div>
+      </div>
+      {packaged && update.status === 'ready' && (
+        <button type="button" className="button" onClick={() => window.sout.installUpdate()}>
+          <RefreshCw size={14} /> Jetzt neu starten
+        </button>
+      )}
+      {packaged && update.status === 'available' && (
+        <button type="button" className="button" onClick={() => window.sout.openUpdateHelp()}>
+          <Download size={14} /> So aktualisierst du
+        </button>
+      )}
+      {packaged && (update.status === 'idle' || update.status === 'checking') && (
+        <button type="button" className="button secondary" disabled={update.status === 'checking'} onClick={() => void window.sout.checkForUpdates()}>
+          Jetzt nachsehen
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -309,6 +437,8 @@ function CoursesSection() {
   )
 }
 
+const ectsFormat = new Intl.NumberFormat('de-AT', { maximumFractionDigits: 1 })
+
 function CourseRow({ course }: { course: Course }) {
   const update = (patch: Parameters<typeof window.sout.updateCourse>[1]): void => void window.sout.updateCourse(course.key, patch)
   return (
@@ -335,6 +465,15 @@ function CourseRow({ course }: { course: Course }) {
         />
         <div className="row-desc">
           {course.key} {course.type} {course.title}
+          {course.ects !== null && ` · ${ectsFormat.format(course.ects)} ECTS`}
+          {course.tuwelUrl && (
+            <>
+              {' · '}
+              <a href={course.tuwelUrl} target="_blank" rel="noreferrer">
+                TUWEL
+              </a>
+            </>
+          )}
         </div>
       </div>
       <Toggle label={`${course.shortName} anzeigen`} checked={!course.hidden} onChange={(shown) => update({ hidden: !shown })} />
@@ -401,7 +540,7 @@ function RemindersSection({ settings }: { settings: Settings }) {
       <div className="rows">
         <div className="row column">
           <div className="row-text">
-            <div className="row-title">Vor Abgaben und Tests erinnern</div>
+            <div className="row-title">Vor Abgaben, Tests und Anmeldeschlüssen erinnern</div>
             <div className="row-desc">Als Benachrichtigung, solange sout läuft – auch im Hintergrund.</div>
           </div>
           <div className="reminder-choices">
@@ -430,8 +569,22 @@ function RemindersSection({ settings }: { settings: Settings }) {
         </div>
         <div className="row">
           <div className="row-text">
+            <div className="row-title">An Prüfungsanmeldungen erinnern</div>
+            <div className="row-desc">
+              Wenn in TISS die Anmeldung zu einer Prüfung deiner LVAs aufmacht und vor dem Anmeldeschluss (zu den Zeiten oben), solange du nicht
+              angemeldet bist. Dazu neue Prüfungstermine, die TISS einträgt.
+            </div>
+          </div>
+          <Toggle
+            label="An Prüfungsanmeldungen erinnern"
+            checked={settings.notifyExamRegistration}
+            onChange={(value) => void window.sout.updateSettings({ notifyExamRegistration: value })}
+          />
+        </div>
+        <div className="row">
+          <div className="row-text">
             <div className="row-title">Änderungen im Stundenplan melden</div>
-            <div className="row-desc">Raumwechsel, verschobene oder entfallene Termine der nächsten zwei Wochen, neue Prüfungstermine.</div>
+            <div className="row-desc">Raumwechsel, verschobene oder entfallene Termine der nächsten zwei Wochen und deine Prüfungsanmeldungen, sobald sie im TISS-Kalender stehen.</div>
           </div>
           <Toggle label="Änderungen im Stundenplan melden" checked={settings.notifyChanges} onChange={(value) => void window.sout.updateSettings({ notifyChanges: value })} />
         </div>
@@ -445,16 +598,27 @@ function RemindersSection({ settings }: { settings: Settings }) {
         <div className="row">
           <div className="row-text">
             <div className="row-title">Neue Bewertungen melden</div>
-            <div className="row-desc">sout schaut alle zwei Stunden in TUWEL nach neuen Noten und Punkten.</div>
+            <div className="row-desc">sout schaut alle zwei Stunden in TUWEL nach neuen Noten und Punkten (zu sehen unter „Noten“).</div>
           </div>
           <Toggle label="Neue Bewertungen melden" checked={settings.notifyGrades} onChange={(value) => void window.sout.updateSettings({ notifyGrades: value })} />
+        </div>
+        <div className="row">
+          <div className="row-text">
+            <div className="row-title">Neue Ankündigungen melden</div>
+            <div className="row-desc">Wenn in einem deiner TUWEL-Kurse eine Ankündigung erscheint (auf „Heute“ stehen die letzten zwei Wochen).</div>
+          </div>
+          <Toggle
+            label="Neue Ankündigungen melden"
+            checked={settings.notifyAnnouncements}
+            onChange={(value) => void window.sout.updateSettings({ notifyAnnouncements: value })}
+          />
         </div>
       </div>
     </section>
   )
 }
 
-function NotesSection() {
+function NotesSection({ settings }: { settings: Settings }) {
   const { notes, reload } = useNotes()
   const [error, setError] = useState<string | null>(null)
   if (!notes) return null
@@ -501,6 +665,18 @@ function NotesSection() {
             </div>
           )}
           {error && <Callout kind="error" title={error} />}
+        </div>
+      </div>
+      <div className="rows materials-row">
+        <div className="row">
+          <div className="row-text">
+            <div className="row-title">TUWEL-Unterlagen laden</div>
+            <div className="row-desc">
+              Dateien aus deinen TUWEL-Kursen (Folien, Skripten, Angaben) kommen alle sechs Stunden in den Ordner „Unterlagen“ des Fachs. Was du dort löschst, kommt
+              nicht wieder.
+            </div>
+          </div>
+          <Toggle label="TUWEL-Unterlagen laden" checked={settings.loadMaterials} onChange={(value) => void window.sout.updateSettings({ loadMaterials: value })} />
         </div>
       </div>
       <p className="section-hint">Beim Wechsel werden vorhandene Notizen nicht verschoben – sout zeigt dann die Notizen im neuen Ordner.</p>

@@ -1,4 +1,5 @@
-/* Colours follow the GNOME light/dark setting through prefers-color-scheme. */
+/* Light or dark comes from prefers-color-scheme: the system setting, or what was chosen in the
+   settings (the main process sets nativeTheme.themeSource). The colour schemes below override these. */
 :root {
   color-scheme: light dark;
   --bg: #f5f6f8;
@@ -12,6 +13,7 @@
   --accent-soft: rgba(47, 111, 224, 0.12);
   --button: #2f6fe0;
   --button-hover: #2560c9;
+  --button-text: #fff;
   --ok: #1f8a52;
   --ok-soft: rgba(31, 138, 82, 0.12);
   --warn: #a8690e;
@@ -61,6 +63,124 @@
     --code-number: #f5a65b;
     --code-function: #7eaaff;
     --code-type: #c7a4ff;
+  }
+}
+
+/* ---------- Colour schemes (Einstellungen → Erscheinungsbild) ---------- */
+
+@media (prefers-color-scheme: light) {
+  /* Catppuccin Latte – catppuccin.com */
+  :root[data-light='latte'] {
+    --bg: #e6e9ef;
+    --sidebar: #dce0e8;
+    --surface: #eff1f5;
+    --surface-muted: #e6e9ef;
+    --border: #ccd0da;
+    --text: #4c4f69;
+    --text-muted: #6c6f85;
+    --accent: #8839ef;
+    --accent-soft: rgba(136, 57, 239, 0.12);
+    --button: #8839ef;
+    --button-hover: #7728d9;
+    --ok: #2d7d1d;
+    --ok-soft: rgba(64, 160, 43, 0.14);
+    --warn: #a7620a;
+    --warn-soft: rgba(223, 142, 29, 0.16);
+    --danger: #d20f39;
+    --danger-soft: rgba(210, 15, 57, 0.1);
+    --shadow: 0 1px 2px rgba(76, 79, 105, 0.08);
+    --hover: rgba(76, 79, 105, 0.07);
+    --code-keyword: #8839ef;
+    --code-string: #40a02b;
+    --code-number: #fe640b;
+    --code-function: #1e66f5;
+    --code-type: #179299;
+  }
+
+  /* Solarized Light – ethanschoonover.com/solarized */
+  :root[data-light='solarized'] {
+    --bg: #f2ebd6;
+    --sidebar: #eee8d5;
+    --surface: #fdf6e3;
+    --surface-muted: #f5efdc;
+    --border: #e3dbc3;
+    --text: #073642;
+    --text-muted: #586e75;
+    --accent: #2077b5;
+    --accent-soft: rgba(38, 139, 210, 0.13);
+    --button: #268bd2;
+    --button-hover: #1f79bb;
+    --ok: #6f7f00;
+    --ok-soft: rgba(133, 153, 0, 0.15);
+    --warn: #9a7500;
+    --warn-soft: rgba(181, 137, 0, 0.16);
+    --danger: #dc322f;
+    --danger-soft: rgba(220, 50, 47, 0.12);
+    --shadow: 0 1px 2px rgba(7, 54, 66, 0.06);
+    --hover: rgba(7, 54, 66, 0.06);
+    --code-keyword: #859900;
+    --code-string: #2aa198;
+    --code-number: #d33682;
+    --code-function: #268bd2;
+    --code-type: #b58900;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  /* Catppuccin Mocha – catppuccin.com */
+  :root[data-dark='mocha'] {
+    --bg: #181825;
+    --sidebar: #11111b;
+    --surface: #1e1e2e;
+    --surface-muted: #313244;
+    --border: #363850;
+    --text: #cdd6f4;
+    --text-muted: #a6adc8;
+    --accent: #cba6f7;
+    --accent-soft: rgba(203, 166, 247, 0.16);
+    --button: #cba6f7;
+    --button-hover: #d6b8fa;
+    --button-text: #11111b;
+    --ok: #a6e3a1;
+    --ok-soft: rgba(166, 227, 161, 0.14);
+    --warn: #f9e2af;
+    --warn-soft: rgba(249, 226, 175, 0.14);
+    --danger: #f38ba8;
+    --danger-soft: rgba(243, 139, 168, 0.14);
+    --hover: rgba(205, 214, 244, 0.06);
+    --code-keyword: #cba6f7;
+    --code-string: #a6e3a1;
+    --code-number: #fab387;
+    --code-function: #89b4fa;
+    --code-type: #f9e2af;
+  }
+
+  /* Nord – nordtheme.com */
+  :root[data-dark='nord'] {
+    --bg: #2e3440;
+    --sidebar: #292e39;
+    --surface: #3b4252;
+    --surface-muted: #434c5e;
+    --border: #4c566a;
+    --text: #eceff4;
+    --text-muted: #a9b3c4;
+    --accent: #88c0d0;
+    --accent-soft: rgba(136, 192, 208, 0.16);
+    --button: #88c0d0;
+    --button-hover: #9dcddb;
+    --button-text: #2e3440;
+    --ok: #a3be8c;
+    --ok-soft: rgba(163, 190, 140, 0.15);
+    --warn: #ebcb8b;
+    --warn-soft: rgba(235, 203, 139, 0.14);
+    --danger: #df8a92;
+    --danger-soft: rgba(191, 97, 106, 0.2);
+    --hover: rgba(236, 239, 244, 0.06);
+    --code-keyword: #81a1c1;
+    --code-string: #a3be8c;
+    --code-number: #b48ead;
+    --code-function: #88c0d0;
+    --code-type: #8fbcbb;
   }
 }
 
@@ -418,7 +538,7 @@ body.resizing iframe {
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: var(--button);
-  color: #fff;
+  color: var(--button-text);
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
@@ -1009,7 +1129,7 @@ body.resizing iframe {
 }
 
 .fc .fc-button-primary:not(:disabled).fc-button-active {
-  color: #fff;
+  color: var(--button-text);
 }
 
 .fc .fc-col-header-cell-cushion,
@@ -1031,6 +1151,12 @@ body.resizing iframe {
 
 .fc .kind-holiday {
   opacity: 0.75;
+}
+
+/* Appointments booked in TUWEL: a stronger left edge. */
+.fc .kind-appointment {
+  border-left-width: 4px;
+  border-left-color: var(--text) !important;
 }
 
 /* Own appointments: striped, so they stand apart from the TISS ones. */
@@ -1463,6 +1589,7 @@ body.resizing iframe {
 
 .task-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -1574,11 +1701,428 @@ select.input {
 
 .task-due.opens {
   display: flex;
+  align-items: flex-end;
 }
 
 .task-card.not-yet .task-title,
 .task-row.not-yet .task-title {
   color: var(--text-muted);
+}
+
+/* ---------- Exams (Prüfungen) ---------- */
+
+.exam-status {
+  display: flex;
+  padding-top: 1px;
+  color: var(--text-muted);
+}
+
+.exam-status.open {
+  color: var(--accent);
+}
+
+.exam-status.registered,
+.exam-status.covered,
+.exam-when.registered,
+.exam-when.covered,
+.exam-signed-up {
+  color: var(--ok);
+}
+
+.exam-status.urgent {
+  color: var(--warn);
+}
+
+.exam-when.soon {
+  color: var(--accent);
+}
+
+.exam-when.closed,
+.exam-when.dismissed,
+.exam-when.none {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.task-card.faded {
+  opacity: 0.65;
+}
+
+.exam-room + .exam-room {
+  margin-top: 3px;
+}
+
+/* The details panel's links are inline-flex; in a line of many rooms they flow like text. */
+.exam-rooms a:not(.button) {
+  display: inline;
+}
+
+.exam-signed-up svg {
+  vertical-align: -2px;
+}
+
+.task-list + .task-list {
+  margin-top: -6px;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+/* ---------- Announcements (Heute) ---------- */
+
+.announcements {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.announcement + .announcement {
+  border-top: 1px solid var(--border);
+}
+
+.announcement-head {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.announcement-head .rotated {
+  transform: rotate(-90deg);
+}
+
+.announcement-title {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.announcement-title svg {
+  color: var(--accent);
+  vertical-align: -1px;
+}
+
+.announcement-meta {
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.announcement-body {
+  padding: 0 0 12px 24px;
+}
+
+.announcement-author {
+  margin: 0 0 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.announcement-text {
+  max-height: 280px;
+  margin: 0 0 10px;
+  overflow-y: auto;
+  font-size: 13px;
+  white-space: pre-line;
+  user-select: text;
+}
+
+/* ---------- Kreuzerlübungen (Abgaben) ---------- */
+
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.example {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.task-room {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.example.checked {
+  border-color: transparent;
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-weight: 600;
+}
+
+/* ---------- Noten ---------- */
+
+.grade-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.grade-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.grade-tile-label {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.grade-tile-value {
+  font-size: 28px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.grade-tile-hint {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.study-row {
+  gap: 12px;
+}
+
+.study-row .row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.study-ects {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.study-ects .input {
+  width: 70px;
+  text-align: right;
+}
+
+.study-grade {
+  flex: none;
+  width: 210px;
+}
+
+.study-grade.grade-5 {
+  color: var(--danger);
+}
+
+.add-course {
+  margin-top: 4px;
+}
+
+.grades-note {
+  margin-bottom: 26px;
+}
+
+.grade-items {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.grade-item + .grade-item {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.grade-item-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.grade-item-name {
+  font-weight: 600;
+}
+
+.grade-item-grade {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.grade-item-range,
+.grade-item-date {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.grade-feedback {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  background: var(--surface-muted);
+  font-size: 13px;
+  white-space: pre-line;
+  user-select: text;
+}
+
+/* ---------- Settings: appearance ---------- */
+
+.palette-choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.palette-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 8px 10px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.palette-card:hover {
+  border-color: var(--text-muted);
+}
+
+.palette-card.active {
+  border-color: var(--accent);
+}
+
+.palette-preview {
+  display: flex;
+  align-items: flex-end;
+  height: 62px;
+  margin-bottom: 6px;
+  padding: 10px 12px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(128, 128, 128, 0.25);
+}
+
+.palette-preview-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 5px;
+  height: 46px;
+  padding: 9px 10px;
+  border-radius: 6px 6px 0 0;
+}
+
+.palette-preview-line {
+  width: 70%;
+  height: 5px;
+  border-radius: 3px;
+}
+
+.palette-preview-line.short {
+  width: 45%;
+  opacity: 0.45;
+}
+
+.palette-preview-button {
+  width: 30px;
+  height: 9px;
+  margin-top: 2px;
+  border-radius: 5px;
+}
+
+.palette-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.palette-name svg {
+  color: var(--accent);
+}
+
+.palette-hint {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.exams-note {
+  margin-top: 0;
+}
+
+.event-details.exam-details {
+  width: 360px;
+}
+
+.exam-details .info-list {
+  grid-template-columns: 84px 1fr;
+}
+
+/* Exams you aren't registered for yet: dashed and only tinted, unlike the ones from your TISS calendar. */
+.fc .kind-exam-option {
+  border-width: 2px;
+  border-style: dashed;
+}
+
+.fc .kind-exam-window {
+  border-left-width: 3px;
+}
+
+/* Appointments at the same time: a warning sign and a dashed outline in the warning colour. */
+.fc .overlap {
+  outline: 2px dashed var(--warn);
+  outline-offset: -2px;
+}
+
+.cal-clash {
+  display: inline-flex;
+  margin-right: 3px;
+  color: var(--warn);
+  vertical-align: -1px;
+}
+
+.fc .overlap .cal-clash {
+  color: inherit;
+}
+
+.clash-label,
+.clash-list {
+  color: var(--warn);
+}
+
+.room-stream {
+  margin-top: 4px;
 }
 
 /* ---------- Notes ---------- */
@@ -2703,4 +3247,59 @@ select.input {
   flex: none;
   color: var(--text-muted);
   font-size: 12px;
+}
+
+/* ---------- Links between notes ---------- */
+
+.markdown a.wikilink {
+  text-decoration-style: dotted;
+}
+
+.markdown a.wikilink.missing {
+  color: var(--text-muted);
+}
+
+.note-exported {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 16px 8px;
+}
+
+.note-exported .callout {
+  flex: 1;
+}
+
+/* ---------- "Als PDF speichern": the print page, always light ---------- */
+
+:root[data-print] {
+  color-scheme: light;
+  --bg: #fff;
+  --surface: #fff;
+  --surface-muted: #f3f4f6;
+  --border: #d9dce2;
+  --text: #111318;
+  --text-muted: #555b66;
+  --accent: #2456c8;
+  --accent-soft: rgba(36, 86, 200, 0.1);
+  --code-keyword: #b4296f;
+  --code-string: #1d7a3a;
+  --code-number: #b35a00;
+  --code-function: #2d5fcf;
+  --code-type: #7c4bd6;
+}
+
+body.is-print {
+  overflow: visible;
+  background: #fff;
+  user-select: text;
+}
+
+.print-note {
+  max-width: none;
+  padding: 0;
+}
+
+.materials-row {
+  margin-top: 10px;
 }

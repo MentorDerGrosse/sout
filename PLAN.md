@@ -1,6 +1,6 @@
 # sout – Plan
 
-Lebendes Dokument, Stand 8. Oktober 2026 (Phasen 0–5 umgesetzt). Fasst das Brainstorming und alle bisherigen Entscheidungen zusammen.
+Lebendes Dokument, Stand 9. Oktober 2026 (Phasen 0–5 umgesetzt, danach weitere Funktionen). Fasst das Brainstorming und alle bisherigen Entscheidungen zusammen.
 
 ## Ziel
 
@@ -9,6 +9,7 @@ Eine Desktop-App (keine Website) fürs Studium an der TU Wien:
 1. **Kalender** mit allen LVAs, Übungsgruppen und Prüfungen aus TISS
 2. **Notizen**, gut organisiert und automatisch nach den aktuellen Fächern sortiert
 3. **Abgaben & Tests** aus TUWEL: was ist offen, bis wann, wo, wie
+4. **Prüfungen** der eigenen LVAs: wann, und bis wann man sich in TISS anmelden muss (kam nach Phase 5 dazu)
 
 Dazu:
 
@@ -35,6 +36,15 @@ Dazu:
   Format: `https://tiss.tuwien.ac.at/events/rest/calendar/personal?token=…&locale=de`
 - Termine haben LVA-Nummer und Typ im Titel (`123.456 VU Titel`) → Fächer automatisch erkennen
 - Öffentliche API für LVA-Details: `https://tiss.tuwien.ac.at/api/course/<LVA-Nr>-<Semester>` (XML, ohne Login)
+- **Prüfungstermine und Anmeldefristen** stehen weder im Feed (dort erst nach der Anmeldung, als `EXAM_SLOT`) noch in der API.
+  Die öffentliche LVA-Seite listet sie aber ohne Login: `https://tiss.tuwien.ac.at/course/courseDetails.xhtml?courseNr=<Nr ohne Punkt>&semester=2026W&locale=de`.
+  - Tabelle „Prüfungen“ mit den Spalten Tag, Zeit, Datum, Ort (Raumlink mit `roomCode`), Prüfungsmodus, Anmeldefrist
+    („01.12.2026 08:00 - 10.12.2026 23:59“), Anmeldung („in TISS“), Prüfung (Name, manchmal die prüfende Person)
+  - eine Zeile pro Raum, kein Blättern
+  - TISS liefert die Seite nur einem „Browserfenster“: Fensterkennung in der Adresse (`dsrid`, `dswid`) und im Cookie
+    `dsrwid-<dsrid>`, sonst kommt nur eine „Loading…“-Seite
+  - Anmelden selbst geht unter `education/course/examDateList.xhtml?courseNr=…&semester=…` (mit TISS-Login)
+  - Auf derselben Seite stehen auch die Fristen für LVA- und Gruppen-Anmeldung
 - Vorbild für Raum-Infos (Adresse, Stockwerk, TUW-Maps-Link, LectureTube): [better-tiss-calendar](https://github.com/flofriday/better-tiss-calendar)
 
 ### TUWEL (Moodle)
@@ -57,7 +67,7 @@ Dazu:
   - `~/.config/sout/settings.json` – Einstellungen
   - `~/.config/sout/secrets.json` – Tokens, verschlüsselt mit Electrons `safeStorage` (Schlüssel im GNOME-Schlüsselbund)
   - `~/.config/autostart/sout.desktop` – nur wenn Autostart an ist
-  - Termine und Abgaben als JSON zwischengespeichert (`calendar.json`, `tuwel.json`); SQLite war bisher nicht nötig
+  - Termine, Abgaben und Prüfungen als JSON zwischengespeichert (`calendar.json`, `tuwel.json`, `exams.json`); SQLite war bisher nicht nötig
   - Notizen: Markdown-Dateien im gewählten Notizordner, dazu `~/.config/sout/notes.json` (für welche Fächer schon ein Ordner angelegt wurde)
 - **Fach** = LVA-Nummer + Semester (z. B. `123.456-2026W`). Das verbindet TISS-Termine, TUWEL-Kurs und Notizordner.
 
@@ -160,33 +170,57 @@ Gestartet würde sout dort schon, und Kalender, Abgaben und Einstellungen funkti
 - [x] Texte je System (Taskleiste/Menüleiste/Leiste, Schlüsselbund, Strg/Cmd); GNOME-Hinweise und `install-desktop` nur unter Linux
 - [x] Installer: Windows (NSIS), macOS (.dmg/.zip für Apple Silicon und Intel), nicht signiert; Anleitung in der README
 - [x] GitHub-Ablauf „Bauen & testen“ (von Hand starten): baut auf echten Linux-, Windows- und Mac-Rechnern, lässt dort den Testlauf laufen, Installer und Screenshots zum Herunterladen
-- [ ] Ablauf „Bauen & testen“ einmal auf GitHub laufen lassen und die Windows-/Mac-Screenshots ansehen
-- [ ] Auf echten Windows- und Mac-Rechnern ausprobieren (Tray, Autostart, Benachrichtigungen)
+- [x] Ablauf „Bauen & testen“ einmal auf GitHub laufen lassen und die Windows-/Mac-Screenshots ansehen
+- [x] Auf echten Windows- und Mac-Rechnern ausprobieren (Tray, Autostart, Benachrichtigungen) – klappt (9.10.2026)
+
+### Nach Phase 5 – weitere Funktionen
+
+Branch `weitere-funktionen`. Nach und nach kommen hierher Punkte aus „Später & Ideen“ und neue Wünsche.
+
+- [x] **Prüfungsanmeldungen** (Linux, Windows, macOS)
+  - sout liest alle sechs Stunden die öffentlichen TISS-Seiten der LVAs aus dem eigenen TISS-Kalender, ohne
+    ausgeblendete Fächer, eine Seite pro Sekunde: Prüfungstermine mit Räumen und Anmeldefrist
+  - Semester je LVA aus ihren Vorlesungen und Gruppen: das laufende und spätere, für eine abgeschlossene LVA das letzte;
+    hat eine LVA Termine in zwei Semestern, liest sout beide Seiten
+  - Angemeldet = der Termin steht im TISS-Kalender (gleiche LVA, Zeit überschneidet sich; bei mehreren der passende Name)
+  - Nicht nötig, also keine Erinnerung:
+    - dieselbe Prüfung zur selben Zeit in einem anderen Raum, Modus oder bei einer anderen prüfenden Person
+    - ein anderer Termin derselben Prüfung, für den man angemeldet ist
+    - die Prüfung steht schon vergangen im Kalender (angetreten)
+    - „Brauche ich nicht“
+  - Neue Seite „Prüfungen“: Anmeldung offen, noch nicht offen, angemeldet, „Vorbei oder nicht nötig“; je Termin
+    Räume mit TUW-Maps-Link, Frist, „In TISS anmelden“
+  - Außerdem:
+    - Karte „Prüfungsanmeldungen“ auf „Heute“
+    - Mini-Ansicht: was in drei Tagen endet oder in einem Tag aufmacht, unter „Fällig“
+    - Kalender: die Prüfung gestrichelt, die Frist als Balken; Filter „Anmeldungen“
+  - Benachrichtigungen (abschaltbar): wenn eine Anmeldung aufmacht, vor dem Anmeldeschluss zu den Erinnerungszeiten,
+    neuer Prüfungstermin in TISS (auch unter „Neuigkeiten“); roter Punkt am Symbol, wenn eine Anmeldung in 24 Stunden endet
+  - Ein neuer Prüfungstermin im TISS-Kalender heißt jetzt „Zur Prüfung angemeldet“
+- [x] **Design:** hell, dunkel oder wie das System; je drei Farbschemata (Standard, Catppuccin Latte, Solarized;
+  Standard, Catppuccin Mocha, Nord)
+- [x] **Kalender:** Überschneidungen markiert; LectureTube-Livestream je Hörsaal (Liste von better-tiss-calendar);
+  Link zum TUWEL-Kurs (von der TISS-LVA-Seite oder TISS' LVA-Schnittstelle); Fristen für Gruppenanmeldung (nur
+  LVAs ohne Gruppe) und LVA-Abmeldung
+- [x] **TUWEL:** Ankündigungen (Forum „Ankündigungen“) auf „Heute“ und als Neuigkeit; Kreuzerlübungen mit
+  angekreuzten Beispielen, Punkten und Feedback; Terminbuchungen (gebuchte Termine im Kalender, offene Buchungszeiten
+  als Aufgabe – über TUWEL-Kalenderereignisse, die Terminbuchung hat keine eigene Schnittstelle); Raum bei Präsenztests
+  aus dem TISS-Kalender
+- [x] **Noten:** ECTS (TISS-LVA-Seite) und selbst eingetragene Noten je Semester, gewichteter Durchschnitt; Bewertungen
+  mit Feedback aus TUWEL
+- [x] **Notizen:** Bilder per Strg+V (Ordner „Bilder“), [[Links]] zwischen Notizen, PDF-Export, TUWEL-Unterlagen
+  automatisch in „Unterlagen“ des Fachs
+- [x] **Updates:** GitHub-Releases (Ablauf „Version veröffentlichen“ bei einem Tag `v…`); Windows und AppImage
+  aktualisieren sich selbst (electron-updater), macOS und RPM melden die neue Version; README mit Anleitung
+- [ ] Die TUWEL-Teile mit echten Daten prüfen (bisher nur mit Testdaten; die TUWEL-Anmeldung war abgelaufen)
+- [ ] Erste Version veröffentlichen (Tag `v0.2.0`)
 
 ### Später & Ideen (ganz am Ende, nach Phase 5)
 
 Hier sammelt sich alles, was „später“ kommen soll, damit nichts verloren geht. Neue Ideen kommen auch hierher. Meldungen bei Raumwechsel, Absage, neuer Aufgabe oder Note stehen schon in Phase 4.
 
-Kalender
-
-- [ ] Link zum TUWEL-Kurs
-- [ ] LectureTube-Link
-- [ ] Überschneidungen markieren
-
-Abgaben & Tests
-
-- [ ] Kreuzerlübungen genauer (was ist angekreuzt)
-- [ ] Terminbuchungen für Abgabegespräche
-- [ ] Noten und Feedback ansehen
-- [ ] Forum-Ankündigungen
-- [ ] Raum bei Präsenztests aus TISS
-
 Notizen
 
-- [ ] Bilder per Strg+V
-- [ ] Links zwischen Notizen
-- [ ] TUWEL-Unterlagen automatisch laden
-- [ ] PDF-Export
 - [ ] Karteikarten
 - [ ] Rechtschreibprüfung (zurzeit aus, sonst wären Formeln rot unterstrichen)
 
@@ -194,12 +228,15 @@ Sonstiges
 
 - [ ] Lernplaner (vom Prüfungstermin rückwärts Lernblöcke einplanen)
 - [ ] Lernzeit pro Fach
-- [ ] ECTS- und Notenübersicht
 - [ ] Mensa-Plan
 
 ## Offene Punkte
 
 - Anmeldefristen (LVA, Gruppe, Prüfung) stehen nicht im TISS-Feed (geprüft 7.10.2026: nur COURSE, GROUP, EXAM_SLOT, HOLIDAY).
+  Für Prüfungen liest sout sie seit 9.10.2026 von den öffentlichen LVA-Seiten. Ändert TISS diese Seiten, zeigt
+  „Prüfungen“ das als Fehler an, die bekannten Termine bleiben stehen.
+- Prüfungen ohne LVA-Anmeldung (nur zur Prüfung angemeldet): Das Semester der Seite kommt dann vom Prüfungsdatum und
+  kann daneben liegen – beobachten.
 - Liefert die TUWEL-Schnittstelle Kreuzerlübungen und Terminbuchungen?
 - TISS meldet abgesagte Termine (vermutlich) nur, indem sie aus dem Feed verschwinden – sout sagt deshalb „steht nicht mehr im TISS-Kalender“; verschwinden mehr als drei Termine eines Fachs auf einmal, kommt eine Zusammenfassung („abgemeldet oder abgesagt?“).
 - macOS kann Anmeldeobjekten keine Startparameter mitgeben; ob sout beim Anmelden gestartet wurde, erkennt es dort nur, solange macOS das noch meldet (`wasOpenedAtLogin`).

@@ -18,7 +18,11 @@ extraResources:
     to: .
 
 artifactName: ${productName}-${version}-${arch}.${ext}
-publish: null
+# New versions: GitHub releases (.github/workflows/release.yml); Windows and the AppImage update themselves.
+publish:
+  provider: github
+  owner: MentorDerGrosse
+  repo: sout
 
 linux:
   target: [AppImage, rpm]

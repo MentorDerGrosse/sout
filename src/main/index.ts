@@ -4,16 +4,35 @@ import { refreshAutostart, startedByAutostart } from './autostart'
 import { startChanges } from './changes'
 import { startCalendarSync } from './calendar'
 import { syncCourseFolders } from './courseNotes'
+import { startExamSync, syncExams } from './exams'
 import { startNotesWatch } from './notes'
 import { handleNotesScheme, registerNotesScheme } from './notesProtocol'
 import { refreshUrgent, startReminders } from './reminders'
 import { registerIpc } from './ipc'
 import { getSettings } from './settings'
-import { dumpGrades, dumpTiss, dumpTuwel, gradesDumpFile, isTuwelProbe, probeTuwel, runSmokeTest, smokeTestDir, tissDumpFile, tryRenewal, tryRenewalArg, tuwelDumpFile } from './smoke'
+import {
+  dumpExams,
+  dumpTiss,
+  dumpTuwel,
+  examsDumpFile,
+  isTuwelProbe,
+  probeTuwel,
+  runSmokeTest,
+  smokeTestDir,
+  tissDumpFile,
+  tryRenewal,
+  tryRenewalArg,
+  tuwelCalls,
+  tuwelCallsFile,
+  tuwelDumpFile
+} from './smoke'
 import { fixCursorSize, missingStartupArgs, trayHostAvailable } from './system'
 import { startTasksSync } from './tasks'
+import { startTuwelExtras } from './tuwelExtras'
+import { startStudies } from './studies'
+import { startUpdates } from './updater'
 import { createTray, ensureTray } from './tray'
-import { broadcast, createMiniWindow, miniTakesOver, notifyRunningInBackground, setOnMainClosed, showMain, syncDock, toggleMini } from './windows'
+import { applyTheme, broadcast, createMiniWindow, miniTakesOver, notifyRunningInBackground, setOnMainClosed, showMain, syncDock, toggleMini } from './windows'
 
 /** `sout --mini` toggles the mini window – meant for a GNOME keyboard shortcut. */
 const MINI_ARG = '--mini'
@@ -34,7 +53,8 @@ if (process.platform === 'win32') app.setAppUserModelId(APP_ID)
 const smokeDir = smokeTestDir(process.argv)
 const dumpFile = tissDumpFile(process.argv)
 const tuwelDump = tuwelDumpFile(process.argv)
-const gradesDump = gradesDumpFile(process.argv)
+const examsDump = examsDumpFile(process.argv)
+const tuwelCallsDump = tuwelCallsFile(process.argv)
 
 if (missingArgs.length > 0) {
   // An AppImage runs from a temporary mount that is gone after exit: start the AppImage file itself again.
@@ -46,8 +66,10 @@ if (missingArgs.length > 0) {
   void dumpTiss(dumpFile)
 } else if (tuwelDump) {
   void dumpTuwel(tuwelDump)
-} else if (gradesDump) {
-  void dumpGrades(gradesDump)
+} else if (examsDump) {
+  void dumpExams(examsDump)
+} else if (tuwelCallsDump) {
+  void tuwelCalls(tuwelCallsDump)
 } else if (isTuwelProbe(process.argv)) {
   void probeTuwel()
 } else if (tryRenewalArg(process.argv)) {
@@ -73,6 +95,7 @@ let started = false
 
 async function start(): Promise<void> {
   Menu.setApplicationMenu(process.platform === 'darwin' ? Menu.buildFromTemplate(MAC_MENU) : null)
+  applyTheme()
   refreshAutostart()
   registerIpc()
   handleNotesScheme()
@@ -86,8 +109,24 @@ async function start(): Promise<void> {
     broadcast(IPC.calendarChanged)
     // New courses get their notes folder (once the notes are set up).
     syncCourseFolders()
+    // A new course: read its exam dates. A new entry in the calendar may be an exam registration.
+    void syncExams()
+    refreshUrgent()
+  })
+  startExamSync(() => {
+    broadcast(IPC.examsChanged)
+    refreshUrgent()
   })
   startTasksSync(() => {
+    broadcast(IPC.tasksChanged)
+    refreshUrgent()
+  })
+  startStudies(() => broadcast(IPC.studiesChanged))
+  startUpdates(() => broadcast(IPC.updateChanged))
+  // Announcements, Kreuzerl, grades – and booked appointments (calendar) and booking periods (tasks).
+  startTuwelExtras(() => {
+    broadcast(IPC.tuwelExtrasChanged)
+    broadcast(IPC.calendarChanged)
     broadcast(IPC.tasksChanged)
     refreshUrgent()
   })

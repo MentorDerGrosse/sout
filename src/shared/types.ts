@@ -1,8 +1,10 @@
 // Contract between the main process and the UI. The preload script exposes SoutApi as window.sout.
 
-export type View = 'today' | 'calendar' | 'deadlines' | 'notes' | 'settings'
+import type { ThemeMode } from './themes'
 
-const VIEWS: readonly string[] = ['today', 'calendar', 'deadlines', 'notes', 'settings']
+export type View = 'today' | 'calendar' | 'deadlines' | 'exams' | 'grades' | 'notes' | 'settings'
+
+const VIEWS: readonly string[] = ['today', 'calendar', 'deadlines', 'exams', 'grades', 'notes', 'settings']
 
 export function isView(value: unknown): value is View {
   return typeof value === 'string' && VIEWS.includes(value)
@@ -28,6 +30,17 @@ export interface Settings {
   notifyNewTasks: boolean
   /** Look for new grades in TUWEL and notify. */
   notifyGrades: boolean
+  /** Notify about new announcements in the TUWEL courses. */
+  notifyAnnouncements: boolean
+  /** Download TUWEL course files into the course's notes folder ("Unterlagen"). */
+  loadMaterials: boolean
+  /** Exam registrations in TISS: notify when they open, remind before they close, report new exam dates. */
+  notifyExamRegistration: boolean
+  /** Light, dark, or as the system says. */
+  themeMode: ThemeMode
+  /** Colour scheme in light and in dark mode (ids from shared/themes.ts). */
+  lightPalette: string
+  darkPalette: string
 }
 
 /** Reminder times offered in the settings: minutes before a deadline → label. */
@@ -68,7 +81,7 @@ export interface AppInfo {
   launcher: string | null
 }
 
-export type EventKind = 'course' | 'group' | 'exam' | 'holiday' | 'other' | 'own'
+export type EventKind = 'course' | 'group' | 'exam' | 'holiday' | 'other' | 'own' | 'appointment'
 
 /** One appointment from the TISS calendar. */
 export interface CalendarEvent {
@@ -89,6 +102,9 @@ export interface CalendarEvent {
   otherLocations: string[]
   /** Own appointments: id of the OwnEvent this (occurrence) comes from; null for TISS. */
   ownId: string | null
+  /** Appointments booked in TUWEL: with whom, and the TUWEL page. */
+  with?: string | null
+  url?: string | null
 }
 
 /** An own appointment as entered: study group, study block … */
@@ -119,6 +135,12 @@ export interface Course {
   shortName: string
   color: string
   hidden: boolean
+  /** From the course's TISS page (null until it has been read). */
+  ects: number | null
+  /** The course in TUWEL, as TISS links it. */
+  tuwelUrl: string | null
+  /** "LectureTube Lehrveranstaltung": lectures are streamed and recorded. */
+  lectureTube: boolean
 }
 
 export type CoursePatch = Partial<Pick<Course, 'shortName' | 'color' | 'hidden'>>
@@ -127,6 +149,8 @@ export type CoursePatch = Partial<Pick<Course, 'shortName' | 'color' | 'hidden'>
 export interface RoomInfo {
   address: string
   mapCode: string
+  /** Live stream of the room (LectureTube), if it has one. */
+  lectureTube: string | null
 }
 
 export interface CalendarData {
@@ -141,6 +165,77 @@ export interface CalendarData {
   syncedAt: string | null
   /** Message of the last failed sync, null if it worked. */
   error: string | null
+  syncing: boolean
+}
+
+/** A room of an exam date. */
+export interface ExamRoom {
+  /** As TISS calls it, e.g. "GM 1 Audi. Max.- ARCH-INF". */
+  name: string
+  /** For the TUW-Maps link; null if unknown. */
+  mapCode: string | null
+  address: string | null
+}
+
+/** An exam date of one of your courses, from the course's public TISS page – with its registration window. */
+export interface ExamDate {
+  /** LVA number, day, time and name. */
+  id: string
+  courseKey: string
+  /** Semester of the course page it is listed on, e.g. "2026W". */
+  semester: string
+  /** As TISS lists it ("Test 1", "Zwischentest"); some courses put the examiner's name here. */
+  name: string
+  /** "schriftlich", "mündlich" … */
+  mode: string | null
+  /** ISO date-times; for exams without a time 00:00–23:59 of that day. */
+  start: string
+  end: string
+  allDay: boolean
+  rooms: ExamRoom[]
+  /** Registration window (ISO); null where TISS gives none. */
+  opens: string | null
+  closes: string | null
+  /** How to register, as TISS says, e.g. "in TISS". */
+  registration: string | null
+  /** It is in your TISS calendar: you are registered. */
+  registered: boolean
+  /**
+   * Not needed although you aren't registered for it – why: registered for another exam of the
+   * course at the same time or another date of the same exam, or you took that exam already.
+   */
+  covered: string | null
+  /** Marked as not needed in sout: no reminders, not on "Heute" or in the calendar. */
+  dismissed: boolean
+}
+
+/**
+ * Another deadline from the course page: a group registration window (only for courses you are in
+ * no group of yet), or the last day to deregister from a course.
+ */
+export interface CourseDeadline {
+  id: string
+  courseKey: string
+  semester: string
+  kind: 'group' | 'deregister'
+  /** Group registration: the groups this window is for. */
+  groups: string[]
+  opens: string | null
+  closes: string | null
+  /** Marked as not needed in sout. */
+  dismissed: boolean
+}
+
+export interface ExamsData {
+  /** Upcoming exam dates of the courses in the TISS calendar (hidden courses left out), by date. */
+  exams: ExamDate[]
+  /** Group registrations and deregistration deadlines still ahead, soonest first. */
+  deadlines: CourseDeadline[]
+  /** Course pages that couldn't be read the last time. */
+  failed: { courseKey: string; error: string }[]
+  /** How many course pages sout looks at. */
+  courses: number
+  syncedAt: string | null
   syncing: boolean
 }
 
@@ -176,6 +271,90 @@ export interface Task {
   url: string | null
   /** Moodle's label for the next step, e.g. "Abgabe hinzufügen". */
   actionLabel: string | null
+  /** Tests in a lecture hall: the room, from an exam or appointment in the TISS calendar at that time. */
+  room?: string | null
+}
+
+/** A post in a course's announcement forum ("Ankündigungen") in TUWEL. */
+export interface Announcement {
+  id: string
+  courseKey: string | null
+  course: string
+  title: string
+  /** Plain text. */
+  text: string
+  author: string
+  at: string
+  pinned: boolean
+  url: string
+}
+
+/** A Kreuzerlübung in TUWEL: the examples to tick, and which ones you ticked. */
+export interface CheckmarkSheet {
+  id: number
+  courseKey: string | null
+  course: string
+  name: string
+  due: string | null
+  cutoff: string | null
+  examples: { name: string; checked: boolean }[]
+  /** Something was submitted (before that nothing counts as ticked). */
+  submitted: boolean
+  grade: string | null
+  feedback: string | null
+  url: string
+}
+
+/** One graded item of a course in TUWEL. */
+export interface GradeEntry {
+  id: number
+  name: string
+  /** As TUWEL shows it, e.g. "8,50". */
+  grade: string
+  range: string | null
+  percentage: string | null
+  /** Plain text. */
+  feedback: string | null
+  gradedAt: string | null
+}
+
+/** A course's grades in TUWEL. */
+export interface CourseGrades {
+  courseKey: string | null
+  course: string
+  url: string
+  /** Course total as TUWEL shows it; null if TUWEL doesn't show one. */
+  total: string | null
+  items: GradeEntry[]
+}
+
+/** A course's final grade as you enter it: 1–5, or "mit Erfolg teilgenommen". */
+export type CourseGrade = '1' | '2' | '3' | '4' | '5' | 'passed'
+
+/** A course in the ECTS and grade overview. */
+export interface StudyCourse {
+  key: string
+  semester: string
+  type: string | null
+  title: string
+  ects: number | null
+  grade: CourseGrade | null
+  /** Added by hand (not from the TISS calendar). */
+  manual: boolean
+}
+
+export interface StudiesData {
+  /** Newest semester first. */
+  courses: StudyCourse[]
+}
+
+/** More from TUWEL than deadlines: announcements, Kreuzerlübungen, grades. */
+export interface TuwelExtras {
+  announcements: Announcement[]
+  checkmarks: CheckmarkSheet[]
+  grades: CourseGrades[]
+  gradesCheckedAt: string | null
+  syncedAt: string | null
 }
 
 export interface TasksData {
@@ -205,7 +384,7 @@ export interface Change {
   id: string
   /** When sout noticed it (ISO). */
   at: string
-  kind: 'room' | 'time' | 'cancelled' | 'added' | 'exam' | 'task' | 'grade'
+  kind: 'room' | 'time' | 'cancelled' | 'added' | 'exam' | 'task' | 'grade' | 'announcement' | 'material'
   title: string
   detail: string
   /** Where a click leads: a view of sout, or a TUWEL page. */
@@ -263,6 +442,18 @@ export interface SearchHit {
   count: number
 }
 
+/** New versions from the GitHub releases. */
+export interface UpdateState {
+  current: string
+  /** Newest version found; null if not known (yet). */
+  latest: string | null
+  /** available: newer version, to install by hand (macOS, RPM); ready: downloaded, installs on quit. */
+  status: 'idle' | 'checking' | 'downloading' | 'available' | 'ready'
+  /** This installation updates itself (Windows installer, Linux AppImage). */
+  automatic: boolean
+  error: string | null
+}
+
 export interface SoutApi {
   getInfo(): Promise<AppInfo>
   getSettings(): Promise<Settings>
@@ -297,6 +488,27 @@ export interface SoutApi {
   /** One change, or with null all. */
   dismissChange(id: string | null): Promise<Change[]>
   onChangesChanged(listener: () => void): () => void
+  getStudies(): Promise<StudiesData>
+  updateStudyCourse(key: string, semester: string, patch: { grade?: CourseGrade | null; ects?: number | null }): Promise<StudiesData>
+  /** Looks the course up in TISS (title, ECTS). */
+  addStudyCourse(key: string, semester: string): Promise<Result<StudiesData>>
+  removeStudyCourse(key: string, semester: string): Promise<StudiesData>
+  onStudiesChanged(listener: () => void): () => void
+  getUpdateState(): Promise<UpdateState>
+  checkForUpdates(): Promise<UpdateState>
+  /** Quits and installs the downloaded version (Windows, AppImage). */
+  installUpdate(): void
+  /** Opens the download page or the update guide. */
+  openUpdateHelp(): void
+  onUpdateChanged(listener: () => void): () => void
+  getTuwelExtras(): Promise<TuwelExtras>
+  onTuwelExtrasChanged(listener: () => void): () => void
+  getExams(): Promise<ExamsData>
+  /** Reads the TISS calendar and the course pages again now. */
+  syncExams(): Promise<ExamsData>
+  /** "Brauche ich nicht" – or with false back again. */
+  dismissExam(id: string, dismissed: boolean): Promise<ExamsData>
+  onExamsChanged(listener: () => void): () => void
   getNotes(): Promise<NotesData>
   /** Creates the notes folder (null: the suggested one) with Inbox and course folders. */
   setupNotes(dir: string | null): Promise<Result<NotesData>>
@@ -312,6 +524,14 @@ export interface SoutApi {
   noteForEvent(eventId: string): Promise<Result<string>>
   /** The note for an assignment – opened or created. */
   noteForTask(taskId: string): Promise<Result<string>>
+  /** A pasted picture, saved next to the note; returns its path relative to the note's folder. */
+  saveNoteImage(path: string, data: Uint8Array, type: string): Promise<Result<string>>
+  /** Creates the note a [[link]] points to, in folder `dir`. */
+  createLinkedNote(dir: string, title: string): Promise<Result<string>>
+  /** Saves the note as PDF (asks where); returns the file or null if cancelled. */
+  exportNotePdf(path: string): Promise<Result<string | null>>
+  /** The print page tells it's ready to be printed. */
+  printReady(): void
   /** Saves a quick note into the Inbox. */
   quickNote(text: string): Promise<Result<string>>
   renameNote(path: string, name: string): Promise<Result<string>>
@@ -362,6 +582,22 @@ export const IPC = {
   getChanges: 'sout:get-changes',
   dismissChange: 'sout:dismiss-change',
   changesChanged: 'sout:changes-changed',
+  getStudies: 'sout:get-studies',
+  updateStudyCourse: 'sout:update-study-course',
+  addStudyCourse: 'sout:add-study-course',
+  removeStudyCourse: 'sout:remove-study-course',
+  studiesChanged: 'sout:studies-changed',
+  getUpdateState: 'sout:get-update-state',
+  checkForUpdates: 'sout:check-for-updates',
+  installUpdate: 'sout:install-update',
+  openUpdateHelp: 'sout:open-update-help',
+  updateChanged: 'sout:update-changed',
+  getTuwelExtras: 'sout:get-tuwel-extras',
+  tuwelExtrasChanged: 'sout:tuwel-extras-changed',
+  getExams: 'sout:get-exams',
+  syncExams: 'sout:sync-exams',
+  dismissExam: 'sout:dismiss-exam',
+  examsChanged: 'sout:exams-changed',
   getNotes: 'sout:get-notes',
   setupNotes: 'sout:setup-notes',
   chooseNotesDir: 'sout:choose-notes-dir',
@@ -372,6 +608,10 @@ export const IPC = {
   noteForEvent: 'sout:note-for-event',
   noteForTask: 'sout:note-for-task',
   quickNote: 'sout:quick-note',
+  saveNoteImage: 'sout:save-note-image',
+  createLinkedNote: 'sout:create-linked-note',
+  exportNotePdf: 'sout:export-note-pdf',
+  printReady: 'sout:print-ready',
   renameNote: 'sout:rename-note',
   moveNote: 'sout:move-note',
   trashNote: 'sout:trash-note',

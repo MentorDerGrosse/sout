@@ -6,9 +6,11 @@ import listPlugin from '@fullcalendar/list'
 import interactionPlugin from '@fullcalendar/interaction'
 import deLocale from '@fullcalendar/core/locales/de'
 import type { EventChangeArg, EventContentArg, EventInput } from '@fullcalendar/core'
-import { ExternalLink, MapPin, NotebookPen, Pencil, Plus, RefreshCw, Repeat, Trash2, X } from 'lucide-react'
+import { ExternalLink, MapPin, NotebookPen, Pencil, Plus, RefreshCw, Repeat, Trash2, TriangleAlert, Video, X } from 'lucide-react'
 import { EVENT_NOTE_FOLDERS } from '../../../shared/notes'
-import type { CalendarData, CalendarEvent, EventKind, OwnEvent, View } from '../../../shared/types'
+import type { CalendarData, CalendarEvent, EventKind, ExamDate, OwnEvent, View } from '../../../shared/types'
+import { ExamInfo } from '../ExamInfo'
+import { examCourse, examStatus, useExams, windowText } from '../lib/exams'
 import { eventNotePath, useNotes } from '../lib/notes'
 import { openTasks, taskCourse, useTasks } from '../lib/tasks'
 import { Callout } from '../components'
@@ -22,6 +24,7 @@ import {
   isoDate,
   KIND_LABELS,
   mapsUrl,
+  overlapping,
   roomName,
   syncStatus,
   tissCourseUrl,
@@ -29,13 +32,15 @@ import {
   visibleEvents
 } from '../lib/calendar'
 
-type Filter = EventKind | 'deadline'
+type Filter = EventKind | 'deadline' | 'registration'
 
 const KIND_FILTERS: { kind: Filter; label: string }[] = [
   { kind: 'course', label: 'Vorlesungen' },
   { kind: 'group', label: 'Gruppen' },
   { kind: 'exam', label: 'Prüfungen' },
+  { kind: 'registration', label: 'Anmeldungen' },
   { kind: 'own', label: 'Eigene' },
+  { kind: 'appointment', label: 'TUWEL-Termine' },
   { kind: 'deadline', label: 'Abgaben' },
   { kind: 'holiday', label: 'Ferien' }
 ]
@@ -44,12 +49,17 @@ export default function CalendarView(props: { onNavigate: (view: View) => void; 
   const { onNavigate } = props
   const data = useCalendar()
   const tasks = useTasks()
+  const exams = useExams()
   const [hiddenKinds, setHiddenKinds] = useState<Set<Filter>>(new Set())
   const [selected, setSelected] = useState<CalendarEvent | null>(null)
+  const [selectedExam, setSelectedExam] = useState<string | null>(null)
+  // The list shows a registration window as its two moments; the grids as a bar across its days.
+  const [listView, setListView] = useState(false)
   const [dialog, setDialog] = useState<{ draft: OwnEventDraft; editingId?: string } | null>(null)
   if (!data) return null
 
   const courses = courseMap(data)
+  const clashes = overlapping(data)
   const ownById = new Map(data.own.map((own) => [own.id, own]))
   const fromTiss = data.events.some((event) => event.ownId === null)
   const events: EventInput[] = visibleEvents(data)
@@ -68,8 +78,8 @@ export default function CalendarView(props: { onNavigate: (view: View) => void; 
         backgroundColor: color,
         borderColor: color,
         textColor: '#fff',
-        classNames: [`kind-${event.kind}`],
-        extendedProps: { room: event.location ? roomName(event.location) : '' }
+        classNames: [`kind-${event.kind}`, ...(clashes.has(event.id) ? ['overlap'] : [])],
+        extendedProps: { room: event.location ? roomName(event.location) : '', overlap: clashes.has(event.id) }
       }
     })
 
@@ -113,6 +123,83 @@ export default function CalendarView(props: { onNavigate: (view: View) => void; 
       })
     }
   }
+
+  // Exams you still have to register for: the exam itself (dashed) and its registration window in
+  // the all-day row. No clock that re-renders every minute: that would get in the way of dragging.
+  const now = new Date()
+  if (exams && !hiddenKinds.has('registration')) {
+    for (const exam of exams.exams) {
+      const status = examStatus(exam, now.getTime())
+      if (status !== 'open' && status !== 'soon' && status !== 'none') continue
+      const course = examCourse(exam, data)
+      const label = `${course.name} · ${exam.name}`
+      events.push({
+        id: `exam:${exam.id}`,
+        title: label,
+        start: exam.allDay ? exam.start.slice(0, 10) : exam.start,
+        end: exam.allDay ? undefined : exam.end,
+        allDay: exam.allDay,
+        backgroundColor: `color-mix(in srgb, ${course.color} 14%, transparent)`,
+        borderColor: course.color,
+        textColor: 'var(--text)',
+        classNames: ['kind-exam-option'],
+        extendedProps: { room: status === 'none' ? 'nicht angemeldet' : `Anmeldung ${windowText(exam, status, now)}` }
+      })
+      const windowStyle = {
+        allDay: true,
+        backgroundColor: `color-mix(in srgb, ${course.color} 28%, transparent)`,
+        borderColor: course.color,
+        textColor: 'var(--text)',
+        classNames: ['kind-exam-window']
+      }
+      const closes = exam.closes ? closingMoment(exam.closes) : null
+      if (exam.opens && closes && !listView) {
+        // One bar from the day it opens to the day it closes – that day's time matters, so it's in the title.
+        events.push({
+          ...windowStyle,
+          id: `exam-window:${exam.id}`,
+          title: `Anmeldung: ${label} · bis ${closingFormat.format(closes)} ${formatTime(closes.toISOString())}`,
+          start: isoDate(new Date(exam.opens)),
+          end: isoDate(addDays(closes, 1))
+        })
+      } else {
+        if (exam.opens) events.push({ ...windowStyle, id: `exam-opens:${exam.id}`, title: `${formatTime(exam.opens)} Anmeldung öffnet: ${label}`, start: isoDate(new Date(exam.opens)) })
+        if (closes) events.push({ ...windowStyle, id: `exam-closes:${exam.id}`, title: `${formatTime(closes.toISOString())} Anmeldeschluss: ${label}`, start: isoDate(closes) })
+      }
+    }
+  }
+  // Group registrations (courses without a group yet) as bars, deregistration deadlines on their day.
+  if (exams && !hiddenKinds.has('registration')) {
+    for (const deadline of exams.deadlines) {
+      if (deadline.dismissed || !deadline.closes) continue
+      const course = courses.get(deadline.courseKey)
+      const name = course?.shortName ?? deadline.courseKey
+      const color = course?.color ?? HOLIDAY_COLOR
+      const closes = closingMoment(deadline.closes)
+      const style = {
+        allDay: true,
+        backgroundColor: `color-mix(in srgb, ${color} 28%, transparent)`,
+        borderColor: color,
+        textColor: 'var(--text)',
+        classNames: ['kind-exam-window']
+      }
+      if (deadline.kind === 'deregister') {
+        events.push({ ...style, id: `deadline:${deadline.id}`, title: `${formatTime(closes.toISOString())} LVA-Abmeldung endet: ${name}`, start: isoDate(closes) })
+      } else if (deadline.opens && !listView) {
+        events.push({
+          ...style,
+          id: `deadline:${deadline.id}`,
+          title: `Gruppenanmeldung: ${name} · bis ${closingFormat.format(closes)} ${formatTime(closes.toISOString())}`,
+          start: isoDate(new Date(deadline.opens)),
+          end: isoDate(addDays(closes, 1))
+        })
+      } else {
+        if (deadline.opens) events.push({ ...style, id: `deadline-opens:${deadline.id}`, title: `${formatTime(deadline.opens)} Gruppenanmeldung öffnet: ${name}`, start: isoDate(new Date(deadline.opens)) })
+        events.push({ ...style, id: `deadline:${deadline.id}`, title: `${formatTime(closes.toISOString())} Gruppenanmeldung endet: ${name}`, start: isoDate(closes) })
+      }
+    }
+  }
+  const shownExam = selectedExam ? exams?.exams.find((exam) => exam.id === selectedExam) : undefined
 
   const toggleKind = (kind: Filter): void => {
     const next = new Set(hiddenKinds)
@@ -210,9 +297,20 @@ export default function CalendarView(props: { onNavigate: (view: View) => void; 
           eventDrop={(change) => void moveOwn(change)}
           eventResize={(change) => void moveOwn(change)}
           eventContent={renderEvent}
+          datesSet={(info) => setListView(info.view.type.startsWith('list'))}
           eventClick={(info) => {
-            if (info.event.id.startsWith('task:')) onNavigate('deadlines')
-            else setSelected(data.events.find((event) => event.id === info.event.id) ?? null)
+            const id = info.event.id
+            if (id.startsWith('task:')) {
+              onNavigate('deadlines')
+            } else if (id.startsWith('deadline')) {
+              onNavigate('exams')
+            } else if (id.startsWith('exam')) {
+              setSelected(null)
+              setSelectedExam(id.slice(id.indexOf(':') + 1))
+            } else {
+              setSelectedExam(null)
+              setSelected(data.events.find((event) => event.id === id) ?? null)
+            }
           }}
         />
       </div>
@@ -229,8 +327,18 @@ export default function CalendarView(props: { onNavigate: (view: View) => void; 
           }}
         />
       ) : (
-        selected && <EventDetails data={data} event={selected} onClose={() => setSelected(null)} onNavigate={onNavigate} onOpenNote={props.onOpenNote} />
+        selected && (
+          <EventDetails
+            data={data}
+            event={selected}
+            clashes={clashes.get(selected.id) ?? []}
+            onClose={() => setSelected(null)}
+            onNavigate={onNavigate}
+            onOpenNote={props.onOpenNote}
+          />
+        )
       )}
+      {shownExam && <ExamDetails data={data} exam={shownExam} now={now} onClose={() => setSelectedExam(null)} />}
       {dialog && (
         <OwnEventDialog courses={data.courses.filter((course) => !course.hidden)} initial={dialog.draft} editingId={dialog.editingId} onClose={() => setDialog(null)} />
       )}
@@ -240,11 +348,17 @@ export default function CalendarView(props: { onNavigate: (view: View) => void; 
 
 function renderEvent(arg: EventContentArg) {
   // Month cells are small: one line with dot, time and name.
+  const clash = arg.event.extendedProps['overlap'] === true && (
+    <span className="cal-clash" title="Überschneidet sich mit einem anderen Termin">
+      <TriangleAlert size={11} />
+    </span>
+  )
   if (arg.view.type === 'dayGridMonth' && !arg.event.allDay) {
     return (
       <div className="cal-event-line">
-        <span className="cal-dot" style={{ background: arg.event.backgroundColor }} />
+        <span className="cal-dot" style={{ background: arg.event.borderColor }} />
         <span className="cal-event-time">{arg.timeText}</span>
+        {clash}
         <span className="cal-event-title">{arg.event.title}</span>
       </div>
     )
@@ -254,17 +368,60 @@ function renderEvent(arg: EventContentArg) {
   const sub = [arg.event.allDay || arg.view.type === 'listMonth' ? '' : arg.timeText, room].filter(Boolean).join(' · ')
   return (
     <div className="cal-event">
-      <div className="cal-event-title">{arg.event.title}</div>
+      <div className="cal-event-title">
+        {clash}
+        {arg.event.title}
+      </div>
       {sub && <div className="cal-event-sub">{sub}</div>}
     </div>
   )
 }
 
 const longDay = new Intl.DateTimeFormat('de-AT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+const closingFormat = new Intl.DateTimeFormat('de-AT', { weekday: 'short' })
+
+/** When registration ends; at midnight that is the end of the day before (shown as 23:59). */
+function closingMoment(iso: string): Date {
+  const at = new Date(iso)
+  return at.getHours() === 0 && at.getMinutes() === 0 ? new Date(at.getTime() - 60_000) : at
+}
+
+function addDays(date: Date, days: number): Date {
+  const result = new Date(date)
+  result.setDate(result.getDate() + days)
+  return result
+}
+
+/** An exam you aren't registered for (yet): when, where, the registration window – and the way to TISS. */
+function ExamDetails(props: { data: CalendarData; exam: ExamDate; now: Date; onClose: () => void }) {
+  const { data, exam, now } = props
+  const { name, color, course } = examCourse(exam, data)
+  return (
+    <aside className="event-details exam-details" style={{ borderTopColor: color }}>
+      <div className="event-details-head">
+        <span className="event-kind">Prüfung · nicht angemeldet</span>
+        <button type="button" className="icon-button" aria-label="Schließen" onClick={props.onClose}>
+          <X size={16} />
+        </button>
+      </div>
+      <h2>
+        {name} · {exam.name}
+      </h2>
+      {course && (
+        <p className="event-course">
+          {course.key} {course.type} {course.title}
+        </p>
+      )}
+      <ExamInfo exam={exam} calendar={data} now={now} showCourse={false} />
+    </aside>
+  )
+}
 
 function EventDetails(props: {
   data: CalendarData
   event: CalendarEvent
+  /** Appointments at the same time. */
+  clashes: CalendarEvent[]
   onClose: () => void
   onNavigate: (view: View) => void
   onOpenNote: (path: string, fresh?: boolean) => void
@@ -299,6 +456,13 @@ function EventDetails(props: {
                 <MapPin size={13} /> {roomName(event.location)}
               </a>
               {data.rooms[event.location] && <div className="room-address">{data.rooms[event.location]!.address}</div>}
+              {data.rooms[event.location]?.lectureTube && (
+                <div className="room-stream">
+                  <a href={data.rooms[event.location]!.lectureTube!} target="_blank" rel="noreferrer">
+                    <Video size={13} /> LectureTube (Livestream des Hörsaals)
+                  </a>
+                </div>
+              )}
               {event.otherLocations.map((room) => (
                 <div key={room} className="other-room">
                   auch in{' '}
@@ -317,6 +481,25 @@ function EventDetails(props: {
             <dd>{event.detail}</dd>
           </>
         )}
+        {event.with && (
+          <>
+            <dt>Mit</dt>
+            <dd>{event.with}</dd>
+          </>
+        )}
+        {props.clashes.length > 0 && (
+          <>
+            <dt className="clash-label">
+              <TriangleAlert size={13} />
+            </dt>
+            <dd className="clash-list">
+              Gleichzeitig:{' '}
+              {props.clashes
+                .map((other) => `${eventLabel(other, other.courseKey ? courseMap(data).get(other.courseKey) : undefined)} (${formatTime(other.start)}–${formatTime(other.end)})`)
+                .join(', ')}
+            </dd>
+          </>
+        )}
       </dl>
       {course && (
         <div className="event-actions">
@@ -324,6 +507,17 @@ function EventDetails(props: {
           <a className="button secondary small" href={tissCourseUrl(course.key, start)} target="_blank" rel="noreferrer">
             <ExternalLink size={13} /> LVA in TISS
           </a>
+          {event.url ? (
+            <a className="button secondary small" href={event.url} target="_blank" rel="noreferrer">
+              <ExternalLink size={13} /> In TUWEL öffnen
+            </a>
+          ) : (
+            course.tuwelUrl && (
+              <a className="button secondary small" href={course.tuwelUrl} target="_blank" rel="noreferrer">
+                <ExternalLink size={13} /> Kurs in TUWEL
+              </a>
+            )
+          )}
         </div>
       )}
       {!course && event.kind !== 'holiday' && <Callout kind="info" title={event.title} />}

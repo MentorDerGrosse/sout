@@ -1,4 +1,5 @@
-resources/rooms.csv stammt aus better-tiss-calendar (https://github.com/flofriday/better-tiss-calendar, app/resources/rooms.csv).
+resources/rooms.csv und resources/lecturetube.csv stammen aus better-tiss-calendar
+(https://github.com/flofriday/better-tiss-calendar, app/resources/rooms.csv und app/resources/lecturetube_availability.csv).
 
 MIT License
 

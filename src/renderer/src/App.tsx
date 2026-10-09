@@ -1,11 +1,13 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
-import { CalendarDays, ClipboardList, NotebookPen, PanelLeftClose, PanelLeftOpen, Settings, Sun, type LucideIcon } from 'lucide-react'
+import { Award, CalendarDays, ClipboardList, GraduationCap, NotebookPen, PanelLeftClose, PanelLeftOpen, Settings, Sun, type LucideIcon } from 'lucide-react'
 import type { View } from '../../shared/types'
 import { Logo, ResizeHandle } from './components'
 import { currentSemester } from './lib/dates'
 import { clamp, useRemembered } from './lib/storage'
 import CalendarView from './views/CalendarView'
 import DeadlinesView from './views/DeadlinesView'
+import ExamsView from './views/ExamsView'
+import GradesView from './views/GradesView'
 import SettingsView from './views/SettingsView'
 import type { NoteRequest } from './views/NotesView'
 import Today from './views/Today'
@@ -21,6 +23,8 @@ const NAV: { view: View; label: string; icon: LucideIcon }[] = [
   { view: 'today', label: 'Heute', icon: Sun },
   { view: 'calendar', label: 'Kalender', icon: CalendarDays },
   { view: 'deadlines', label: 'Abgaben', icon: ClipboardList },
+  { view: 'exams', label: 'Prüfungen', icon: GraduationCap },
+  { view: 'grades', label: 'Noten', icon: Award },
   { view: 'notes', label: 'Notizen', icon: NotebookPen }
 ]
 
@@ -111,6 +115,10 @@ export default function App({ initialView, initialNote }: { initialView: View; i
                 <Today onNavigate={setView} />
               ) : view === 'settings' ? (
                 <SettingsView />
+              ) : view === 'exams' ? (
+                <ExamsView onNavigate={setView} />
+              ) : view === 'grades' ? (
+                <GradesView />
               ) : (
                 <DeadlinesView onOpenNote={openNote} onNavigate={setView} />
               )}

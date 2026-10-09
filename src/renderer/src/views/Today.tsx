@@ -1,8 +1,31 @@
-import type { ReactNode } from 'react'
-import { Bell, CalendarClock, CalendarDays, CalendarPlus, CalendarX2, Circle, CircleCheck, ClipboardList, Clock, DoorOpen, GraduationCap, PartyPopper, X, type LucideIcon } from 'lucide-react'
-import type { Change, View } from '../../../shared/types'
+import { useState, type ReactNode } from 'react'
+import {
+  Bell,
+  CalendarClock,
+  CalendarDays,
+  CalendarPlus,
+  CalendarX2,
+  ChevronDown,
+  Circle,
+  CircleCheck,
+  ClipboardList,
+  Clock,
+  DoorOpen,
+  ExternalLink,
+  FileDown,
+  GraduationCap,
+  Megaphone,
+  PartyPopper,
+  Pin,
+  X,
+  type LucideIcon
+} from 'lucide-react'
+import type { CalendarData, Change, View } from '../../../shared/types'
 import { ago, useChanges } from '../lib/changes'
+import { useTuwelExtras } from '../lib/tuwel'
 import { EventList } from '../EventList'
+import { ExamList } from '../ExamList'
+import { examsToAct, groupWindowsToAct, useExams } from '../lib/exams'
 import { TaskList } from '../TaskList'
 import { nextUp, useTasks } from '../lib/tasks'
 import { holidayOn, upcoming, useCalendar } from '../lib/calendar'
@@ -34,6 +57,8 @@ export default function Today({ onNavigate }: { onNavigate: (view: View) => void
 
       <div className="grid">
         <News now={now} onNavigate={onNavigate} />
+        <ExamRegistrations calendar={calendar} now={now} onNavigate={onNavigate} />
+        <Announcements calendar={calendar} now={now} />
 
         <section className="card">
           <h2 className="card-title">
@@ -160,7 +185,9 @@ const CHANGE_ICONS: Record<Change['kind'], LucideIcon> = {
   added: CalendarPlus,
   exam: CalendarPlus,
   task: ClipboardList,
-  grade: GraduationCap
+  grade: GraduationCap,
+  announcement: Megaphone,
+  material: FileDown
 }
 
 /** Changes since the last syncs: room, time, dropped appointments, new exams, assignments, grades. */
@@ -198,6 +225,74 @@ function News({ now, onNavigate }: { now: Date; onNavigate: (view: View) => void
         })}
       </ul>
       {changes.length > 8 && <p className="section-hint">und {changes.length - 8} weitere</p>}
+    </section>
+  )
+}
+
+/** Exam and group registrations open now or opening within a week – only when there are some. */
+function ExamRegistrations({ calendar, now, onNavigate }: { calendar: CalendarData | null; now: Date; onNavigate: (view: View) => void }) {
+  const data = useExams()
+  const exams = data ? examsToAct(data.exams, now, 7) : []
+  const groups = data ? groupWindowsToAct(data.deadlines, now, 7) : []
+  const total = exams.length + groups.length
+  if (total === 0) return null
+  const shownExams = exams.slice(0, 4)
+  const shownGroups = groups.slice(0, 4 - shownExams.length)
+  return (
+    <section className="card span-2">
+      <h2 className="card-title">
+        <GraduationCap size={16} /> {groups.length > 0 ? 'Anmeldungen' : 'Prüfungsanmeldungen'}
+      </h2>
+      <ExamList exams={shownExams} deadlines={shownGroups} calendar={calendar} now={now} />
+      <button type="button" className="link" onClick={() => onNavigate('exams')}>
+        {total > 4 ? `Alle Prüfungen (${total} Anmeldungen offen oder bald)` : 'Alle Prüfungen'}
+      </button>
+    </section>
+  )
+}
+
+/** How far back announcements count as recent. */
+const RECENT_MS = 14 * 24 * 60 * 60_000
+
+/** The latest announcements in the TUWEL courses (two weeks), each one opens to its text. */
+function Announcements({ calendar, now }: { calendar: CalendarData | null; now: Date }) {
+  const extras = useTuwelExtras()
+  const [open, setOpen] = useState<string | null>(null)
+  const recent = (extras?.announcements ?? []).filter((announcement) => now.getTime() - Date.parse(announcement.at) < RECENT_MS).slice(0, 5)
+  if (recent.length === 0) return null
+  const courseName = (key: string | null, fallback: string): string => calendar?.courses.find((course) => course.key === key)?.shortName ?? fallback
+  return (
+    <section className="card span-2">
+      <h2 className="card-title">
+        <Megaphone size={16} /> Ankündigungen
+      </h2>
+      <ul className="announcements">
+        {recent.map((announcement) => {
+          const expanded = open === announcement.id
+          return (
+            <li key={announcement.id} className={`announcement${expanded ? ' expanded' : ''}`}>
+              <button type="button" className="announcement-head" aria-expanded={expanded} onClick={() => setOpen(expanded ? null : announcement.id)}>
+                <ChevronDown size={14} className={expanded ? '' : 'rotated'} />
+                <span className="announcement-title">
+                  {announcement.pinned && <Pin size={12} />} {announcement.title}
+                </span>
+                <span className="announcement-meta">
+                  {courseName(announcement.courseKey, announcement.course)} · {ago(announcement.at, now)}
+                </span>
+              </button>
+              {expanded && (
+                <div className="announcement-body">
+                  <p className="announcement-author">{announcement.author}</p>
+                  <p className="announcement-text">{announcement.text}</p>
+                  <a className="button small secondary" href={announcement.url} target="_blank" rel="noreferrer">
+                    <ExternalLink size={13} /> In TUWEL öffnen
+                  </a>
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ul>
     </section>
   )
 }

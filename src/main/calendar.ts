@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { CalendarData, CalendarEvent, Course, CoursePatch, EventKind } from '../shared/types'
 import { parseIcal, type IcalEvent } from './ical'
+import { courseInfo } from './courseInfo'
 import { readJson, writeJson } from './jsonFile'
 import { reportChanges } from './changes'
 import { ownEvents, ownOccurrences } from './ownEvents'
@@ -11,6 +12,7 @@ import { getSettings } from './settings'
 import { roomInfo } from './rooms'
 import { getSecret } from './secrets'
 import { fetchTissFeed } from './tiss'
+import { appointmentEvents } from './tuwelExtras'
 
 const SYNC_INTERVAL_MS = 60 * 60 * 1000
 /** Colours handed out to new courses in turn; changeable per course in the settings. */
@@ -54,7 +56,8 @@ export function calendarData(): CalendarData {
     const info = name ? roomInfo(name) : null
     if (name && info) rooms[name] = info
   }
-  const all = [...events, ...ownOccurrences()].sort((a, b) => a.start.localeCompare(b.start))
+  // TISS, own appointments and the ones booked in TUWEL (Terminbuchung).
+  const all = [...events, ...ownOccurrences(), ...appointmentEvents()].sort((a, b) => a.start.localeCompare(b.start))
   return { events: all, own: ownEvents(), courses: courses(events), rooms, syncedAt, error, syncing: syncing !== null }
 }
 
@@ -222,13 +225,17 @@ function courses(events: CalendarEvent[]): Course[] {
   return keys.map((key) => {
     const { type, title } = found.get(key)!
     const override = overrides[key]!
+    const info = courseInfo(key)
     return {
       key,
       type,
       title,
       shortName: override.shortName ?? defaultShortName(title),
       color: override.color,
-      hidden: override.hidden ?? false
+      hidden: override.hidden ?? false,
+      ects: info?.ects ?? null,
+      tuwelUrl: info?.tuwelUrl ?? null,
+      lectureTube: info?.lectureTube ?? false
     }
   })
 }

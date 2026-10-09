@@ -173,6 +173,13 @@ export function noteForTask(taskId: string): string {
 }
 
 /** From the mini window: straight into the Inbox, named after its first line. */
+/** A note for a [[link]] that doesn't lead anywhere yet: created next to the note with the link. */
+export function createLinkedNote(dir: string, title: string): string {
+  const name = safeFileName(title)
+  if (!name) throw new Error('Der Link braucht einen Namen.')
+  return createNoteFile(dir, `${name}.md`, `# ${title.trim()}\n\n`)
+}
+
 export function quickNote(text: string): string {
   const content = typeof text === 'string' ? text.trim() : ''
   if (!content) throw new Error('Die Notiz ist leer.')

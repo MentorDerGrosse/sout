@@ -1,28 +1,32 @@
-import { app, BrowserWindow, Menu, nativeTheme, net, screen } from 'electron'
+import { app, BrowserWindow, Menu, net, screen } from 'electron'
 import { execFile } from 'node:child_process'
-import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { deadlineStatus, examStatus } from '../shared/exams'
 import { IPC, type View } from '../shared/types'
 import { autostartEntry } from './autostart'
 import { calendarChanged, calendarData, startCalendarSync, syncCalendar } from './calendar'
 import { changes, startChanges } from './changes'
-import { importPdfs, noteForEvent, noteForTask, quickNote, setupNotes } from './courseNotes'
-import { notesData, searchNotes, startNotesWatch, writeNote } from './notes'
+import { createLinkedNote, importPdfs, noteForEvent, noteForTask, quickNote, setupNotes } from './courseNotes'
+import { examsData, startExamSync, syncExams } from './exams'
+import { notesData, saveNoteImage, searchNotes, startNotesWatch, writeNote } from './notes'
 import { handleNotesScheme } from './notesProtocol'
 import { addOwnEvent } from './ownEvents'
 import { refreshUrgent } from './reminders'
-import { startTasksSync, syncTasks, tasksData } from './tasks'
+import { startTasksSync, syncTasks, syncTestMaterials, tasksData } from './tasks'
+import { startTuwelExtras, tuwelExtras } from './tuwelExtras'
+import { startStudies, studiesData, updateStudyCourse } from './studies'
 import { readJson } from './jsonFile'
 import { TuwelError, tuwelCall } from './tuwelApi'
 import { lastLoginTrace, trySilent } from './tuwelLogin'
-import { fetchGrades } from './tuwelGrades'
 import { fetchSnapshot } from './tuwelTasks'
 import { registerIpc } from './ipc'
 import { getSecret, secretsStatus } from './secrets'
+import { getSettings, updateSettings } from './settings'
 import { trayHostAvailable, windowSystem } from './system'
 import { fetchTissFeed } from './tiss'
 import { createTray, trayUrgent } from './tray'
-import { broadcast, createMainWindow, createMiniWindow, isMiniVisible, miniTakesOver, setOnMainClosed } from './windows'
+import { applyTheme, broadcast, printNote, createMainWindow, createMiniWindow, isMiniVisible, miniTakesOver, setOnMainClosed } from './windows'
 
 // `--smoke-test=<dir>`: starts everything without showing a window, takes screenshots of the views,
 // writes report.json and quits. Uses its own data folder and no keyring, so it also works on an
@@ -70,7 +74,8 @@ export async function runSmokeTest(dir: string): Promise<void> {
     await app.whenReady()
     // SOUT_SMOKE_THEME=light|dark checks the other colour scheme without touching the GNOME setting.
     const theme = process.env['SOUT_SMOKE_THEME']
-    if (theme === 'light' || theme === 'dark') nativeTheme.themeSource = theme
+    if (theme === 'light' || theme === 'dark') updateSettings({ themeMode: theme })
+    applyTheme()
     report['gpu'] = app.getGPUFeatureStatus()
     Menu.setApplicationMenu(null)
     registerIpc()
@@ -79,7 +84,21 @@ export async function runSmokeTest(dir: string): Promise<void> {
     startChanges(() => broadcast(IPC.changesChanged))
     startCalendarSync(() => broadcast(IPC.calendarChanged))
     startTasksSync(() => broadcast(IPC.tasksChanged))
+    startStudies(() => broadcast(IPC.studiesChanged))
+    startTuwelExtras(() => {
+      broadcast(IPC.tuwelExtrasChanged)
+      broadcast(IPC.calendarChanged)
+      broadcast(IPC.tasksChanged)
+    })
+    startExamSync(() => broadcast(IPC.examsChanged))
     await Promise.all([syncCalendar(), syncTasks()])
+    // The course pages after the calendar: it says which courses are yours.
+    await syncExams(true)
+    report['exams'] = { first: examReport() }
+    report['courseInfo'] = calendarData().courses.map((course) => `${course.key} ${course.ects} ECTS ${course.tuwelUrl}`)
+    report['deadlines'] = examsData().deadlines.map((deadline) =>
+      [deadline.courseKey, deadline.kind, deadline.groups.join('+'), deadline.kind === 'group' ? deadlineStatus(deadline, Date.now()) : ''].filter(Boolean).join(' ')
+    )
     addSampleOwnEvents()
     report['trayHost'] = await trayHostAvailable()
     createTray(report['trayHost'] as boolean | null)
@@ -95,7 +114,7 @@ export async function runSmokeTest(dir: string): Promise<void> {
     await delay(1000)
 
     const screenshots: Record<string, string> = { mini: await screenshot(mini, dir, 'mini') }
-    for (const view of ['today', 'calendar', 'deadlines', 'settings'] satisfies View[]) {
+    for (const view of ['today', 'calendar', 'deadlines', 'exams', 'settings'] satisfies View[]) {
       main.webContents.send(IPC.navigate, view)
       await delay(500)
       screenshots[view] = await screenshot(main, dir, view)
@@ -136,8 +155,11 @@ export async function runSmokeTest(dir: string): Promise<void> {
     await delay(300)
     screenshots['settings-bottom'] = await screenshot(main, dir, 'settings-bottom')
     Object.assign(screenshots, await smokeLayout(main, dir))
+    Object.assign(screenshots, await smokeExams(main, dir))
     Object.assign(screenshots, await smokeOwnEvents(main, dir, report))
     Object.assign(screenshots, await smokeChanges(main, mini, dir, report))
+    Object.assign(screenshots, await smokeTuwelExtras(main, dir))
+    Object.assign(screenshots, await smokeThemes(main, dir))
     await smokeTrayMenu(report)
     Object.assign(screenshots, await smokeNotes(main, mini, dir, report))
     // smokeNotes ends by closing the main window.
@@ -154,6 +176,117 @@ export async function runSmokeTest(dir: string): Promise<void> {
     report['error'] = error instanceof Error ? error.stack : String(error)
     finish(1)
   }
+}
+
+/** Grades and ECTS, an announcement, Kreuzerl sheets, an appointment from TUWEL. */
+async function smokeTuwelExtras(main: BrowserWindow, dir: string): Promise<Record<string, string>> {
+  const shots: Record<string, string> = {}
+  const js = (code: string): Promise<unknown> => main.webContents.executeJavaScript(code)
+  const course = studiesData().courses.find((candidate) => candidate.key === '123.456')
+  if (course) updateStudyCourse(course.key, course.semester, { grade: '2' })
+  main.webContents.send(IPC.navigate, 'grades')
+  await delay(1200)
+  shots['grades'] = await screenshot(main, dir, 'grades')
+  await js(`[...document.querySelectorAll('.task-card .task-body')].at(-1)?.click()`)
+  await delay(400)
+  await js('document.querySelector(".content").scrollTo(0, 1e6)')
+  await delay(1200)
+  shots['grades-tuwel'] = await screenshot(main, dir, 'grades-tuwel')
+  main.webContents.send(IPC.navigate, 'today')
+  await delay(600)
+  await js(`document.querySelector('.announcement-head')?.click()`)
+  await delay(300)
+  await js(`document.querySelector('.announcements')?.scrollIntoView({ block: 'center' })`)
+  await delay(1200)
+  shots['today-announcement'] = await screenshot(main, dir, 'today-announcement')
+  main.webContents.send(IPC.navigate, 'deadlines')
+  await delay(600)
+  await js(`[...document.querySelectorAll('.task-body')].find((b) => b.textContent.includes('Kreuzerlübung 1'))?.click()`)
+  await js(`[...document.querySelectorAll('.task-body')].find((b) => b.textContent.includes('Kreuzerlübung 2'))?.click()`)
+  await delay(300)
+  await js(`[...document.querySelectorAll('.task-body')].find((b) => b.textContent.includes('Kreuzerlübung 2'))?.scrollIntoView({ block: 'start' })`)
+  await delay(1200)
+  shots['deadlines-kreuzerl'] = await screenshot(main, dir, 'deadlines-kreuzerl')
+  await js('document.querySelector(".content").scrollTo(0, 1e6)')
+  await delay(1200)
+  shots['deadlines-kreuzerl-past'] = await screenshot(main, dir, 'deadlines-kreuzerl-past')
+  main.webContents.send(IPC.navigate, 'calendar')
+  await delay(600)
+  await js(`document.querySelector('.fc-listMonth-button')?.click()`)
+  await delay(400)
+  await js(`document.querySelector('.fc-event.kind-appointment')?.click()`)
+  await delay(1200)
+  shots['calendar-appointment'] = await screenshot(main, dir, 'calendar-appointment')
+  await js(`document.querySelector('.event-details .icon-button')?.click()`)
+  await js(`document.querySelector('.fc-timeGridWeek-button')?.click()`)
+  await delay(300)
+  return shots
+}
+
+/** The colour schemes: the choice in the settings, then "Heute" in each scheme (and the calendar in one). */
+async function smokeThemes(main: BrowserWindow, dir: string): Promise<Record<string, string>> {
+  const shots: Record<string, string> = {}
+  const original = getSettings()
+  main.webContents.send(IPC.navigate, 'settings')
+  await delay(400)
+  await main.webContents.executeJavaScript(`document.querySelector('.palette-choices')?.scrollIntoView({ block: 'center' })`)
+  await delay(1000)
+  shots['settings-appearance'] = await screenshot(main, dir, 'settings-appearance')
+  const schemes = [
+    { themeMode: 'light', lightPalette: 'latte' },
+    { themeMode: 'light', lightPalette: 'solarized' },
+    { themeMode: 'dark', darkPalette: 'mocha' },
+    { themeMode: 'dark', darkPalette: 'nord' }
+  ] as const
+  for (const scheme of schemes) {
+    const name = 'lightPalette' in scheme ? scheme.lightPalette : scheme.darkPalette
+    updateSettings(scheme)
+    applyTheme()
+    broadcast(IPC.stateChanged)
+    for (const view of name === 'mocha' ? (['today', 'calendar'] as const) : (['today'] as const)) {
+      main.webContents.send(IPC.navigate, view)
+      await delay(1200)
+      shots[`theme-${name}${view === 'today' ? '' : `-${view}`}`] = await screenshot(main, dir, `theme-${name}${view === 'today' ? '' : `-${view}`}`)
+    }
+  }
+  updateSettings({ themeMode: original.themeMode, lightPalette: original.lightPalette, darkPalette: original.darkPalette })
+  applyTheme()
+  broadcast(IPC.stateChanged)
+  await delay(500)
+  return shots
+}
+
+/** Exam statuses by "<LVA number> <name>". */
+function examReport(): Record<string, string> {
+  const now = Date.now()
+  return Object.fromEntries(examsData().exams.map((exam) => [`${exam.courseKey} ${exam.name}`, examStatus(exam, now)]))
+}
+
+/** The exams page with one exam opened and the folded-away group, and an exam in the calendar. */
+async function smokeExams(main: BrowserWindow, dir: string): Promise<Record<string, string>> {
+  const shots: Record<string, string> = {}
+  const js = (code: string): Promise<unknown> => main.webContents.executeJavaScript(code)
+  main.webContents.send(IPC.navigate, 'exams')
+  await delay(600)
+  await js(`document.querySelector('.exam-card .task-body')?.click()`)
+  await delay(1500)
+  shots['exams-open'] = await screenshot(main, dir, 'exams-open')
+  await js(`document.querySelector('.task-section .group-toggle')?.click()`)
+  await delay(400)
+  await js('document.querySelector(".content").scrollTo(0, 1e6)')
+  await delay(1500)
+  shots['exams-other'] = await screenshot(main, dir, 'exams-other')
+  main.webContents.send(IPC.navigate, 'calendar')
+  await delay(600)
+  await js(`document.querySelector('.fc-dayGridMonth-button')?.click()`)
+  await delay(400)
+  await js(`document.querySelector('.fc-event.kind-exam-option')?.click()`)
+  await delay(1500)
+  shots['calendar-exam'] = await screenshot(main, dir, 'calendar-exam')
+  await js(`document.querySelector('.exam-details .icon-button')?.click()`)
+  await js(`document.querySelector('.fc-timeGridWeek-button')?.click()`)
+  await delay(300)
+  return shots
 }
 
 /** Own appointments next to the TISS ones: a weekly study group and a single study block today. */
@@ -247,6 +380,11 @@ async function smokeOwnEvents(main: BrowserWindow, dir: string, report: Record<s
   await delay(600)
   await js(`document.querySelector('.fc-timeGridWeek-button')?.click()`)
   await delay(400)
+  // Two appointments at the same time today (test data): both marked.
+  report['overlaps'] = await js(`document.querySelectorAll('.fc-timegrid-event.overlap').length`)
+  await js(`document.querySelector('.fc-timegrid-event.overlap')?.scrollIntoView({ block: 'center' })`)
+  await delay(800)
+  shots['calendar-overlap'] = await screenshot(main, dir, 'calendar-overlap')
   await js(`document.querySelector('.fc-timegrid-event.kind-own')?.click()`)
   await delay(1500)
   shots['calendar-own'] = await screenshot(main, dir, 'calendar-own')
@@ -266,6 +404,24 @@ async function smokeChanges(main: BrowserWindow, mini: BrowserWindow, dir: strin
   if (tiss) process.env['SOUT_TISS_FILE'] = tiss
   if (tuwel) process.env['SOUT_TUWEL_FILE'] = tuwel
   if (tiss || tuwel) await Promise.all([syncCalendar(), syncTasks()])
+  const pages = process.env['SOUT_SMOKE_SECOND_PAGES']
+  if (pages) {
+    process.env['SOUT_TISS_PAGES'] = pages
+    await syncExams(true)
+  }
+  ;(report['exams'] as Record<string, unknown>)['second'] = examReport()
+  const extras = tuwelExtras()
+  const quiz = tasksData().tasks.find((task) => task.module === 'quiz')
+  const sheet = extras.checkmarks.find((candidate) => candidate.name === 'Kreuzerlübung 2')
+  report['tuwel'] = {
+    announcements: extras.announcements.length,
+    checkmarks: extras.checkmarks.length,
+    gradedCourses: extras.grades.filter((course) => course.items.length > 0).length,
+    appointments: calendarData().events.filter((event) => event.kind === 'appointment').length,
+    bookings: tasksData().tasks.filter((task) => task.module === 'organizer').length,
+    testRoom: quiz?.room ?? null,
+    sheetTicked: sheet ? `${sheet.examples.filter((example) => example.checked).length} von ${sheet.examples.length}` : null
+  }
   report['changes'] = changes().map((change) => `${change.kind}: ${change.title} – ${change.detail}`)
   main.webContents.send(IPC.navigate, 'today')
   await delay(1500)
@@ -302,6 +458,7 @@ def quadrat(n):
 ## Offene Fragen
 
 - Warum konvergiert die Reihe?
+- Siehe [[Zusammenfassung]] und [[Formelsammlung]]
 `
 
 /** Notes: setup page, a lecture note with formulas, the PDF next to it, search, new-note dialog, quick note. */
@@ -326,6 +483,8 @@ async function smokeNotes(main: BrowserWindow, mini: BrowserWindow, dir: string,
   shots['notes-setup'] = await screenshot(main, dir, 'notes-setup')
 
   const setup = setupNotes(join(dir, 'Studium'))
+  // TUWEL files go into the course folders, now that there are some.
+  await syncTestMaterials()
   const lecture = calendarData().events.find((event) => event.id === '123.456-now') ?? calendarData().events.find((event) => event.kind === 'course')
   const lecturePath = lecture ? noteForEvent(lecture.id) : null
   if (lecturePath) writeNote(lecturePath, SAMPLE_NOTE, null)
@@ -390,8 +549,37 @@ async function smokeNotes(main: BrowserWindow, mini: BrowserWindow, dir: string,
   await js(`[...document.querySelectorAll('.task-body')].find((b) => b.getAttribute('aria-expanded') !== 'true')?.click()`)
   await delay(1500)
   shots['deadlines-note'] = await screenshot(main, dir, 'deadlines-note')
+  ;(report['notes'] as Record<string, unknown>)['extras'] = await smokeNoteExtras(main, dir, openPath, shots)
   ;(report['notes'] as Record<string, unknown>)['editing'] = await smokeEditing(main, join(setup.root!, openPath), openPath)
   return shots
+}
+
+/** A pasted picture, [[links]] (one leads to a new note), the note as PDF. */
+async function smokeNoteExtras(main: BrowserWindow, dir: string, path: string, shots: Record<string, string>): Promise<Record<string, unknown>> {
+  const js = (code: string): Promise<unknown> => main.webContents.executeJavaScript(code)
+  // A 1×1 PNG stands in for a screenshot.
+  const png = Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==', 'base64'))
+  const image = saveNoteImage(path, png, 'image/png')
+  const linked = createLinkedNote(path.slice(0, path.lastIndexOf('/')), 'Formelsammlung')
+  main.webContents.send(IPC.navigate, 'notes', path)
+  await delay(1500)
+  await js(`[...document.querySelectorAll('.segmented button')].find((b) => b.title === 'Lesen')?.click()`)
+  await delay(800)
+  const missing = await js(`[...document.querySelectorAll('.markdown a.wikilink.missing')].map((a) => a.textContent)`)
+  await js('document.querySelector(".note-preview")?.scrollTo(0, 1e6)')
+  await delay(800)
+  shots['notes-links'] = await screenshot(main, dir, 'notes-links')
+  await js(`[...document.querySelectorAll('.segmented button')].find((b) => b.title === 'Geteilt')?.click()`)
+  const pdf = await printNote(path)
+  writeFileSync(join(dir, 'notiz.pdf'), pdf)
+  return {
+    image,
+    imageExists: image.startsWith('Bilder/Bild-'),
+    linked,
+    // [[Zusammenfassung]] leads nowhere yet, [[Formelsammlung]] does now.
+    missingLinks: missing,
+    pdfPages: (pdf.toString('latin1').match(/\/Type\s*\/Page\b/g) ?? []).length
+  }
 }
 
 /** Typing saves by itself, changes from outside show up, conflicts are caught, closing the window saves. Closes the main window. */
@@ -503,6 +691,43 @@ export async function dumpTiss(file: string): Promise<void> {
   app.exit(token ? 0 : 1)
 }
 
+/**
+ * `--dump-exams=<file>` (development only): reads the TISS pages of the courses in the stored
+ * calendar, as the app does, and saves what came out. Prints only counts.
+ */
+export function examsDumpFile(argv: string[]): string | null {
+  const arg = argv.find((value) => value.startsWith('--dump-exams='))
+  return arg && !app.isPackaged ? arg.slice('--dump-exams='.length) : null
+}
+
+export async function dumpExams(file: string): Promise<void> {
+  const profile = useOwnProfile()
+  // A copy of the stored calendar and course settings; the running app keeps its own.
+  for (const name of ['calendar.json', 'courses.json']) {
+    const source = join(profile.realUserData, name)
+    if (existsSync(source)) cpSync(source, join(app.getPath('userData'), name))
+  }
+  await app.whenReady()
+  let code = 0
+  try {
+    await syncExams(true)
+    const data = examsData()
+    writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`)
+    const counts: Record<string, number> = {}
+    for (const exam of data.exams) counts[examStatus(exam, Date.now())] = (counts[examStatus(exam, Date.now())] ?? 0) + 1
+    console.log(`[exams] ${data.courses} LVAs, ${data.exams.length} Prüfungstermine ${JSON.stringify(counts)}, nicht lesbar: ${data.failed.length}`)
+    console.log(`[exams] ECTS/TUWEL-Link je LVA: ${calendarData().courses.map((course) => `${course.ects ?? '?'}/${course.tuwelUrl ? 'ja' : 'nein'}`).join(', ')}`)
+    console.log(`[exams] Fristen: ${data.deadlines.map((deadline) => `${deadline.kind}${deadline.groups.length ? ` (${deadline.groups.length} Gruppen)` : ''}`).join(', ') || 'keine'}`)
+    for (const failed of data.failed) console.log(`[exams]   ${failed.courseKey}: ${failed.error}`)
+  } catch (error) {
+    console.log(`[exams] failed: ${error instanceof Error ? error.message : String(error)}`)
+    code = 1
+  } finally {
+    profile.done()
+    app.exit(code)
+  }
+}
+
 /** `--dump-tuwel=<file>` (development only): saves what TUWEL returns, for SOUT_TUWEL_FILE. */
 export function tuwelDumpFile(argv: string[]): string | null {
   const arg = argv.find((value) => value.startsWith('--dump-tuwel='))
@@ -553,30 +778,36 @@ export async function probeTuwel(): Promise<void> {
   app.exit(0)
 }
 
-/** `--dump-grades=<file>` (development only): fresh token via a copy of the stored login, then the grades. Prints only their shape. */
-export function gradesDumpFile(argv: string[]): string | null {
-  const arg = argv.find((value) => value.startsWith('--dump-grades='))
-  return arg && !app.isPackaged ? arg.slice('--dump-grades='.length) : null
+/**
+ * `--tuwel-calls=<file>` (development only): calls the TUWEL web service functions listed in
+ * SOUT_TUWEL_CALLS (JSON: [["core_webservice_get_site_info", {}], …]) with a fresh token from a copy
+ * of the stored login and saves the answers – to look at what TUWEL offers. Prints only counts.
+ */
+export function tuwelCallsFile(argv: string[]): string | null {
+  const arg = argv.find((value) => value.startsWith('--tuwel-calls='))
+  return arg && !app.isPackaged ? arg.slice('--tuwel-calls='.length) : null
 }
 
-export async function dumpGrades(file: string): Promise<void> {
+export async function tuwelCalls(file: string): Promise<void> {
   const profile = useOwnProfile()
   cpSync(join(profile.realUserData, 'Partitions', 'tuwel'), join(app.getPath('userData'), 'Partitions', 'tuwel'), { recursive: true })
   await app.whenReady()
   let code = 0
   try {
+    const calls = JSON.parse(process.env['SOUT_TUWEL_CALLS'] ?? '[]') as [string, Record<string, unknown>][]
     const token = await trySilent('session')
-    const site = await tuwelCall<{ userid: number }>(token, 'core_webservice_get_site_info')
-    const courses = await tuwelCall<{ id: number; enddate?: number }[]>(token, 'core_enrol_get_users_courses', { userid: site.userid })
-    console.log(`[grades] ${courses.length} courses, fields: ${Object.keys(courses[0] ?? {}).join(', ')}`)
-    const first = courses[0] ? await tuwelCall<Record<string, unknown>>(token, 'gradereport_user_get_grade_items', { courseid: courses[0].id, userid: site.userid }) : null
-    const items = ((first?.['usergrades'] as { gradeitems?: Record<string, unknown>[] }[] | undefined)?.[0]?.gradeitems ?? [])
-    console.log(`[grades] first course: ${items.length} items, fields: ${Object.keys(items[0] ?? {}).join(', ')}`)
-    const grades = await fetchGrades(token, site.userid)
-    console.log(`[grades] graded items in current courses: ${grades.length}`)
-    writeFileSync(file, `${JSON.stringify(grades, null, 2)}\n`)
+    const answers: { call: string; args: Record<string, unknown>; result?: unknown; error?: string }[] = []
+    for (const [name, args] of calls) {
+      try {
+        answers.push({ call: name, args, result: await tuwelCall(token, name, args) })
+      } catch (error) {
+        answers.push({ call: name, args, error: error instanceof TuwelError ? `${error.code}: ${error.message}` : String(error) })
+      }
+    }
+    writeFileSync(file, `${JSON.stringify(answers, null, 2)}\n`)
+    console.log(`[tuwel] ${answers.length} Aufrufe, ${answers.filter((answer) => answer.error).length} mit Fehler`)
   } catch (error) {
-    console.log(`[grades] failed: ${error instanceof Error ? error.message : String(error)}`)
+    console.log(`[tuwel] failed: ${error instanceof Error ? error.message : String(error)}`)
     code = 1
   } finally {
     profile.done()

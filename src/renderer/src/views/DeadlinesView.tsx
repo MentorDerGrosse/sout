@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react'
-import { ChevronDown, ExternalLink, LockKeyhole, LogIn, NotebookPen, Plus, RefreshCw, Trash2 } from 'lucide-react'
-import type { CalendarData, NotesData, Task, TasksData, View } from '../../../shared/types'
+import { Check, ChevronDown, ExternalLink, ListChecks, LockKeyhole, LogIn, MapPin, NotebookPen, Plus, RefreshCw, Trash2, X } from 'lucide-react'
+import type { CalendarData, CheckmarkSheet, NotesData, Task, TasksData, TuwelExtras, View } from '../../../shared/types'
 import { Callout } from '../components'
-import { useCalendar } from '../lib/calendar'
+import { roomName, useCalendar } from '../lib/calendar'
+import { checkedText, sheetOf, useTuwelExtras } from '../lib/tuwel'
 import { useNow } from '../lib/hooks'
 import { taskNotePath, useNotes } from '../lib/notes'
 import { dueText, GROUP_LABELS, groupTasks, isUrgent, opensLater, opensText, remainingText, splitTasks, taskCourse, useTasks } from '../lib/tasks'
@@ -14,6 +15,7 @@ type OpenNote = (path: string, fresh?: boolean) => void
 export default function DeadlinesView({ onOpenNote, onNavigate }: { onOpenNote: OpenNote; onNavigate: (view: View) => void }) {
   const data = useTasks()
   const calendar = useCalendar()
+  const extras = useTuwelExtras()
   const { notes } = useNotes()
   const now = useNow(60_000)
   const [adding, setAdding] = useState(false)
@@ -21,6 +23,8 @@ export default function DeadlinesView({ onOpenNote, onNavigate }: { onOpenNote: 
   if (!data) return null
 
   const { open, later, done } = splitTasks(data.tasks, now)
+  // Kreuzerlübungen whose deadline is over: what you ticked, for the exercise session – and the points.
+  const pastSheets = (extras?.checkmarks ?? []).filter((sheet) => sheet.due && Date.parse(sheet.due) < now.getTime()).reverse()
 
   return (
     <>
@@ -67,7 +71,7 @@ export default function DeadlinesView({ onOpenNote, onNavigate }: { onOpenNote: 
             <div key={key} className="task-day">
               <div className={`task-day-label${key === 'overdue' ? ' overdue' : ''}`}>{GROUP_LABELS[key]}</div>
               {tasks.map((task) => (
-                <TaskCard key={task.id} task={task} calendar={calendar} notes={notes} now={now} onOpenNote={onOpenNote} onNavigate={onNavigate} />
+                <TaskCard key={task.id} task={task} calendar={calendar} extras={extras} notes={notes} now={now} onOpenNote={onOpenNote} onNavigate={onNavigate} />
               ))}
             </div>
           ))}
@@ -81,7 +85,19 @@ export default function DeadlinesView({ onOpenNote, onNavigate }: { onOpenNote: 
           </h2>
           <p className="section-hint">Kannst du noch nicht abgeben – sortiert danach, was zuerst aufmacht.</p>
           {later.map((task) => (
-            <TaskCard key={task.id} task={task} calendar={calendar} notes={notes} now={now} onOpenNote={onOpenNote} onNavigate={onNavigate} />
+            <TaskCard key={task.id} task={task} calendar={calendar} extras={extras} notes={notes} now={now} onOpenNote={onOpenNote} onNavigate={onNavigate} />
+          ))}
+        </section>
+      )}
+
+      {pastSheets.length > 0 && (
+        <section className="task-section">
+          <h2>
+            Kreuzerlübungen <span className="group-count">{pastSheets.length}</span>
+          </h2>
+          <p className="section-hint">Was du angekreuzt hast – für die Übungseinheit. Die letzten vier Wochen, die neueste oben.</p>
+          {pastSheets.map((sheet) => (
+            <SheetCard key={sheet.id} sheet={sheet} calendar={calendar} />
           ))}
         </section>
       )}
@@ -91,7 +107,10 @@ export default function DeadlinesView({ onOpenNote, onNavigate }: { onOpenNote: 
           <button type="button" className="group-toggle" aria-expanded={showDone} onClick={() => setShowDone(!showDone)}>
             <ChevronDown size={14} className={showDone ? '' : 'rotated'} /> Erledigt ({done.length})
           </button>
-          {showDone && done.map((task) => <TaskCard key={task.id} task={task} calendar={calendar} notes={notes} now={now} onOpenNote={onOpenNote} onNavigate={onNavigate} />)}
+          {showDone &&
+            done.map((task) => (
+              <TaskCard key={task.id} task={task} calendar={calendar} extras={extras} notes={notes} now={now} onOpenNote={onOpenNote} onNavigate={onNavigate} />
+            ))}
         </section>
       )}
     </>
@@ -181,10 +200,62 @@ function TodoForm({ calendar, onDone }: { calendar: CalendarData | null; onDone:
 }
 
 const longFormat = new Intl.DateTimeFormat('de-AT', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+const sheetDayFormat = new Intl.DateTimeFormat('de-AT', { weekday: 'short', day: 'numeric', month: 'short' })
+
+/** The examples of a Kreuzerlübung: ticked ones green. */
+function Examples({ sheet }: { sheet: CheckmarkSheet }) {
+  return (
+    <ul className="examples" aria-label="Beispiele">
+      {sheet.examples.map((example) => (
+        <li key={example.name} className={`example${example.checked ? ' checked' : ''}`} title={example.checked ? 'angekreuzt' : 'nicht angekreuzt'}>
+          {example.checked ? <Check size={12} /> : <X size={12} />} {example.name}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** A Kreuzerlübung whose deadline is over: what was ticked, points and feedback. */
+function SheetCard({ sheet, calendar }: { sheet: CheckmarkSheet; calendar: CalendarData | null }) {
+  const [expanded, setExpanded] = useState(false)
+  const course = calendar?.courses.find((candidate) => candidate.key === sheet.courseKey)
+  return (
+    <article className={`task-card exam-card${expanded ? ' expanded' : ''}`}>
+      <span className="event-bar" style={{ background: course?.color ?? 'var(--text-muted)' }} />
+      <span className="exam-status open">
+        <ListChecks size={16} />
+      </span>
+      <button type="button" className="task-body" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
+        <span className="task-head">
+          <span className="task-title">{sheet.name}</span>
+          <span className="task-when">{checkedText(sheet)}</span>
+        </span>
+        <span className="task-head">
+          <span className="task-meta">
+            {[course?.shortName ?? sheet.course, sheet.due && `fällig ${sheetDayFormat.format(new Date(sheet.due))}`].filter(Boolean).join(' · ')}
+          </span>
+          {sheet.grade && <span className="task-remaining">{sheet.grade} Punkte</span>}
+        </span>
+      </button>
+      {expanded && (
+        <div className="task-details">
+          <Examples sheet={sheet} />
+          {sheet.feedback && <p className="task-description">{sheet.feedback}</p>}
+          <div className="task-actions">
+            <a className="button small secondary" href={sheet.url} target="_blank" rel="noreferrer">
+              <ExternalLink size={13} /> In TUWEL öffnen
+            </a>
+          </div>
+        </div>
+      )}
+    </article>
+  )
+}
 
 function TaskCard(props: {
   task: Task
   calendar: CalendarData | null
+  extras: TuwelExtras | null
   notes: NotesData | null
   now: Date
   onOpenNote: OpenNote
@@ -203,6 +274,7 @@ function TaskCard(props: {
     else setNoteError(result.error)
   }
   const course = taskCourse(task, calendar)
+  const sheet = sheetOf(task, props.extras)
   const done = task.status === 'done'
   const overdue = !done && Boolean(task.due && new Date(task.due) < now)
   const notYet = opensLater(task, now)
@@ -234,6 +306,12 @@ function TaskCard(props: {
           <span className="task-meta">
             {[course.name, task.kindLabel].filter(Boolean).join(' · ')}
             {task.status === 'draft' && <span className="pill warn">Entwurf, noch nicht abgegeben</span>}
+            {sheet && <span className={`pill${sheet.submitted ? ' ok' : ''}`}>{checkedText(sheet)}</span>}
+            {task.room && (
+              <span className="task-room">
+                <MapPin size={11} /> {roomName(task.room)}
+              </span>
+            )}
           </span>
           {notYet
             ? task.due && <span className="task-remaining">{`${task.dueLabel} ${dueText(task.due, now)}`}</span>
@@ -281,6 +359,25 @@ function TaskCard(props: {
               <>
                 <dt>Dateitypen</dt>
                 <dd>{task.fileTypes}</dd>
+              </>
+            )}
+            {task.room && (
+              <>
+                <dt>Raum</dt>
+                <dd>
+                  <a href={`https://maps.tuwien.ac.at/?q=${encodeURIComponent(calendar?.rooms[task.room]?.mapCode ?? roomName(task.room))}#map`} target="_blank" rel="noreferrer">
+                    <MapPin size={13} /> {roomName(task.room)}
+                  </a>{' '}
+                  <span className="room-address">laut TISS-Kalender</span>
+                </dd>
+              </>
+            )}
+            {sheet && sheet.examples.length > 0 && (
+              <>
+                <dt>Angekreuzt</dt>
+                <dd>
+                  <Examples sheet={sheet} />
+                </dd>
               </>
             )}
           </dl>

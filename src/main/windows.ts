@@ -1,5 +1,6 @@
-import { app, BrowserWindow, Notification, nativeTheme, screen, shell, type Rectangle } from 'electron'
+import { app, BrowserWindow, ipcMain, Notification, nativeTheme, screen, shell, type IpcMainEvent, type Rectangle } from 'electron'
 import { fileURLToPath } from 'node:url'
+import { DARK_PALETTES, LIGHT_PALETTES, palette } from '../shared/themes'
 import { IPC, type View } from '../shared/types'
 import { preloadPath, rendererHtml, resourcePath } from './paths'
 import { getSettings, updateSettings } from './settings'
@@ -27,8 +28,24 @@ export function setOnMainClosed(listener: () => void): void {
   onMainClosed = listener
 }
 
+/** The page background of the chosen colour scheme – shown before the page has loaded. */
 function backgroundColor(): string {
-  return nativeTheme.shouldUseDarkColors ? '#1b1c1f' : '#f5f6f8'
+  const { lightPalette, darkPalette } = getSettings()
+  return nativeTheme.shouldUseDarkColors ? palette(DARK_PALETTES, darkPalette).background : palette(LIGHT_PALETTES, lightPalette).background
+}
+
+let followingSystem = false
+
+/** Light, dark or as the system says (that also switches the pages' prefers-color-scheme). */
+export function applyTheme(): void {
+  nativeTheme.themeSource = getSettings().themeMode
+  for (const win of BrowserWindow.getAllWindows()) win.setBackgroundColor(backgroundColor())
+  if (followingSystem) return
+  followingSystem = true
+  // The system switched between light and dark.
+  nativeTheme.on('updated', () => {
+    for (const win of BrowserWindow.getAllWindows()) win.setBackgroundColor(backgroundColor())
+  })
 }
 
 /** The URL hash tells the page which window it is and what to show: "mini", "calendar", "notes:<note path>". */
@@ -229,6 +246,32 @@ export function hideMini(): void {
   miniWindow.hide()
   miniHiddenAt = Date.now()
   for (const listener of miniListeners) listener()
+}
+
+/**
+ * A note as PDF: a hidden window renders it like the preview (page "print:<path>", always light),
+ * says when formulas and pictures are there, then Chromium prints it.
+ */
+export async function printNote(path: string): Promise<Buffer> {
+  const win = new BrowserWindow({ show: false, width: 900, height: 1200, webPreferences: { preload: preloadPath(), sandbox: true, contextIsolation: true } })
+  let onReady: ((event: IpcMainEvent) => void) | null = null
+  try {
+    const ready = new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('Die Notiz ließ sich nicht für den Druck aufbereiten.')), 20_000)
+      onReady = (event) => {
+        if (event.sender !== win.webContents) return
+        clearTimeout(timer)
+        resolve()
+      }
+      ipcMain.on(IPC.printReady, onReady)
+    })
+    load(win, `print:${encodeURIComponent(path)}`)
+    await ready
+    return await win.webContents.printToPDF({ pageSize: 'A4', printBackground: true, margins: { top: 0.6, bottom: 0.6, left: 0.7, right: 0.7 } })
+  } finally {
+    if (onReady) ipcMain.removeListener(IPC.printReady, onReady)
+    win.destroy()
+  }
 }
 
 /** Where the tray icon sits, for texts. */
