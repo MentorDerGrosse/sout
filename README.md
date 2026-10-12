@@ -17,6 +17,15 @@ Kurz, was sout kann:
   (Windows, Linux) – für Linux, Windows und macOS
 Plan, Entscheidungen und Hintergründe: [PLAN.md](PLAN.md).
 
+**Inhalt**
+
+| Loslegen | Mehr wissen | Für Entwickler |
+|---|---|---|
+| [Installieren](#installieren) | [Prüfungen und Anmeldefristen](#prüfungen-und-anmeldefristen) | [Aus dem Quellcode](#aus-dem-quellcode-entwicklung) |
+| [Setup: TISS, TUWEL, Notizen](#setup) | [Notizen](#notizen) | [Ins System einbinden](#ins-system-einbinden-linux-aus-dem-projektordner) |
+| [Aktualisieren](#aktualisieren) | [Wo liegen die Daten?](#wo-liegen-die-daten) | [Startschalter](#startschalter-xwayland-und-deutsch-linux) |
+| [Selbst bauen](#selbst-bauen) | [Lizenz](#lizenz) · [Danke](#danke) | [Testlauf ohne Fenster](#testlauf-ohne-fenster) |
+
 ## Installieren
 
 Die fertigen Dateien liegen bei jeder Version unter **[Releases](https://github.com/MentorDerGrosse/sout/releases/latest)**
@@ -80,10 +89,55 @@ Welchen Chip dein Mac hat, steht unter  → Über diesen Mac.
 
 ### Überall gleich
 
-- **Erster Start:** Unter Einstellungen trägst du die TISS-Kalender-URL ein, unter Abgaben meldest du dich bei TUWEL an.
+- **Erster Start:** TISS-Kalender verbinden, bei TUWEL anmelden, Notizordner anlegen – Schritt für Schritt unter
+  [Setup](#setup).
 - **Autostart:** in der App unter Einstellungen oder im Menü des Symbols.
 - **Schließen** beendet sout nicht: Das Hauptfenster wird zur Mini-Ansicht beim Symbol, ein Klick daneben schickt sie
   ins Symbol (in den Einstellungen abschaltbar). Ganz beenden mit Strg+Q (Mac: Cmd+Q) oder „Beenden“ im Menü.
+
+## Setup
+
+Drei Dinge, dann kennt sout dein Studium. Alles geht später auch noch, nichts davon ist Pflicht.
+
+### 1. TISS-Kalender verbinden (das Wichtigste)
+
+Aus deinem TISS-Kalender holt sout deine LVAs, Gruppentermine und Prüfungen – und damit auch Prüfungstermine,
+Anmeldefristen und die Ordner für deine Notizen. Dafür braucht sout die **persönliche Kalender-URL** aus TISS. Sie
+enthält einen Schlüssel (Token), mit dem man nur deinen Kalender lesen kann, nicht dein Passwort.
+
+1. Auf [tiss.tuwien.ac.at](https://tiss.tuwien.ac.at) anmelden und oben im Menü **Kalender** öffnen.
+
+   ![TISS: der Kalender im Menü](docs/setup/tiss-kalender-1.png)
+
+2. Ganz nach unten scrollen. Dort die **persönliche Kalender-URL** erzeugen (beim ersten Mal) und kopieren. Sie sieht
+   so aus: `https://tiss.tuwien.ac.at/events/rest/calendar/personal?token=…&locale=de`
+
+   ![TISS: die persönliche Kalender-URL ganz unten](docs/setup/tiss-kalender-2.png)
+
+3. In sout **Einstellungen → Zugänge → TISS-Kalender**: die URL einfügen und **Speichern**. Mit „Verbindung testen“
+   siehst du, ob TISS sie annimmt. Nach ein paar Sekunden stehen deine Termine im Kalender.
+
+   ![sout: Einstellungen → Zugänge](docs/setup/sout-zugaenge.png)
+
+Gut zu wissen:
+
+- Die URL ist wie ein Passwort für deinen Kalender: **nicht weitergeben**, nirgends posten. sout speichert sie
+  verschlüsselt im Schlüsselbund des Systems.
+- Wer sie in TISS neu erzeugt, macht die alte ungültig. Dann in sout „Entfernen“ und die neue einfügen.
+- Statt der ganzen URL reicht auch nur der Token (der Teil nach `token=`).
+
+### 2. Bei TUWEL anmelden
+
+Für Abgaben, Tests, Kreuzerlübungen, Ankündigungen, Bewertungen und Unterlagen. In sout **Einstellungen → Zugänge →
+TUWEL → „Bei TUWEL anmelden“** (oder auf der Seite Abgaben). Es öffnet sich der normale TU-Wien-Login, wie bei der
+Moodle-App. sout sieht und speichert dein Passwort nie, nur den Schlüssel, den TUWEL danach herausgibt. Läuft er ab,
+steht dort „Neu anmelden“.
+
+### 3. Notizordner anlegen
+
+Auf der Seite **Notizen → „Ordner anlegen“** (Vorschlag: `Studium` in deinem Benutzerordner, oder „Anderer Ordner …“).
+Die Notizen sind normale Markdown-Dateien, mehr dazu unter [Notizen](#notizen). Mit verbundenem TISS-Kalender bekommt
+jedes Fach automatisch seinen Ordner.
 
 ## Aktualisieren
 
