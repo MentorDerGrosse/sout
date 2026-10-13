@@ -154,6 +154,10 @@ export async function runSmokeTest(dir: string): Promise<void> {
     await main.webContents.executeJavaScript('document.querySelector(".content").scrollTo(0, 1e6)')
     await delay(300)
     screenshots['settings-bottom'] = await screenshot(main, dir, 'settings-bottom')
+    // The access rows (TISS, TUWEL) – the README's setup pictures come from a run without test data.
+    await main.webContents.executeJavaScript(`[...document.querySelectorAll('.section h2')].find((h) => h.textContent === 'Zugänge')?.scrollIntoView()`)
+    await delay(300)
+    screenshots['settings-access'] = await screenshot(main, dir, 'settings-access')
     Object.assign(screenshots, await smokeLayout(main, dir))
     Object.assign(screenshots, await smokeExams(main, dir))
     Object.assign(screenshots, await smokeOwnEvents(main, dir, report))
