@@ -160,6 +160,7 @@ export async function runSmokeTest(dir: string): Promise<void> {
     Object.assign(screenshots, await smokeChanges(main, mini, dir, report))
     Object.assign(screenshots, await smokeTuwelExtras(main, dir))
     Object.assign(screenshots, await smokeThemes(main, dir))
+    report['history'] = await smokeHistory(main)
     await smokeTrayMenu(report)
     Object.assign(screenshots, await smokeNotes(main, mini, dir, report))
     // smokeNotes ends by closing the main window.
@@ -254,6 +255,65 @@ async function smokeThemes(main: BrowserWindow, dir: string): Promise<Record<str
   broadcast(IPC.stateChanged)
   await delay(500)
   return shots
+}
+
+/**
+ * The mouse's back/forward buttons (3 and 4) and Alt+←/→ step through the views visited. Synthetic
+ * events: they check our listeners, not what Chromium does with a real button press.
+ */
+async function smokeHistory(main: BrowserWindow): Promise<Record<string, boolean>> {
+  const js = (code: string): Promise<unknown> => main.webContents.executeJavaScript(code)
+  const go = async (view: View): Promise<void> => {
+    main.webContents.send(IPC.navigate, view)
+    await delay(300)
+  }
+  const active = (): Promise<unknown> => js(`document.querySelector('.nav-item[aria-current="page"]')?.textContent?.trim() ?? null`)
+  const mouse = async (button: number): Promise<void> => {
+    await js(`document.body.dispatchEvent(new MouseEvent('mouseup', { button: ${button}, bubbles: true }))`)
+    await delay(200)
+  }
+  const altLeftFrom = async (target: string): Promise<void> => {
+    await js(`${target}.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', altKey: true, bubbles: true }))`)
+    await delay(200)
+  }
+
+  const checks: Record<string, boolean> = {}
+  await go('settings')
+  await go('exams')
+  await go('grades')
+  await mouse(3)
+  checks['mouseBack'] = (await active()) === 'Prüfungen'
+  await mouse(4)
+  checks['mouseForward'] = (await active()) === 'Noten'
+  await altLeftFrom('document.body')
+  checks['altArrowBack'] = (await active()) === 'Prüfungen'
+  // A new view after going back drops what was ahead ("Noten").
+  await go('calendar')
+  await mouse(4)
+  checks['forwardDiscarded'] = (await active()) === 'Kalender'
+  // The same view twice is one entry: back lands on the view before it.
+  await go('deadlines')
+  await go('deadlines')
+  await mouse(3)
+  checks['noDuplicateEntry'] = (await active()) === 'Kalender'
+  // Alt+← in a text field moves the cursor; it must not leave the view.
+  await js(`(() => { const input = document.createElement('input'); input.id = 'smoke-history-input'; document.body.append(input); input.focus() })()`)
+  await altLeftFrom(`document.getElementById('smoke-history-input')`)
+  checks['ignoredInInput'] = (await active()) === 'Kalender'
+  await js(`document.getElementById('smoke-history-input')?.remove()`)
+  // Under an open dialog (.modal-backdrop) neither input changes the view.
+  await js(`(() => { const backdrop = document.createElement('div'); backdrop.id = 'smoke-history-modal'; backdrop.className = 'modal-backdrop'; document.body.append(backdrop) })()`)
+  await mouse(3)
+  await altLeftFrom('document.body')
+  checks['ignoredUnderModal'] = (await active()) === 'Kalender'
+  await js(`document.getElementById('smoke-history-modal')?.remove()`)
+  // A click in the sidebar is a step in the history too.
+  await js(`document.querySelector('.nav-item[title="Abgaben"]')?.click()`)
+  await delay(300)
+  const clicked = (await active()) === 'Abgaben'
+  await mouse(3)
+  checks['sidebarClick'] = clicked && (await active()) === 'Kalender'
+  return checks
 }
 
 /** Exam statuses by "<LVA number> <name>". */

@@ -344,6 +344,8 @@ try {
 const problems = []
 if (report.error) problems.push(`Fehler: ${report.error}`)
 for (const [check, ok] of Object.entries(report.notes?.editing ?? {})) if (!ok) problems.push(`Notizen: ${check} fehlgeschlagen`)
+if (!report.history) problems.push('Navigationsverlauf nicht geprüft')
+for (const [check, ok] of Object.entries(report.history ?? {})) if (!ok) problems.push(`Navigationsverlauf: ${check} fehlgeschlagen`)
 if ((report.changes ?? []).length < 6) problems.push(`Nur ${(report.changes ?? []).length} von 6 erwarteten Änderungen erkannt`)
 // What sout should make of the exam dates on the course pages (see exams() above).
 const expectedExams = {
