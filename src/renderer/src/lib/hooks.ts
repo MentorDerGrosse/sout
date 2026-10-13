@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { AppInfo, SecretsStatus, Settings } from '../../../shared/types'
+import type { AppInfo, SecretsStatus, Settings, View } from '../../../shared/types'
 
 export interface AppState {
   info: AppInfo
@@ -37,6 +37,35 @@ export function useAppState(): { state: AppState | null; reload: () => Promise<v
   }, [reload])
 
   return { state, reload }
+}
+
+interface ViewHistory {
+  stack: View[]
+  index: number
+}
+
+/**
+ * The shown view plus the views visited before and after it, like a browser's history: a new view
+ * drops what was ahead, going to the view already shown adds nothing.
+ */
+export function useViewHistory(initial: View): { view: View; navigate: (next: View) => void; back: () => void; forward: () => void } {
+  const [history, setHistory] = useState<ViewHistory>({ stack: [initial], index: 0 })
+
+  const navigate = useCallback((next: View) => {
+    setHistory((current) =>
+      current.stack[current.index] === next ? current : { stack: [...current.stack.slice(0, current.index + 1), next], index: current.index + 1 }
+    )
+  }, [])
+  const step = useCallback((delta: number) => {
+    setHistory((current) => {
+      const index = Math.min(Math.max(current.index + delta, 0), current.stack.length - 1)
+      return index === current.index ? current : { ...current, index }
+    })
+  }, [])
+  const back = useCallback(() => step(-1), [step])
+  const forward = useCallback(() => step(1), [step])
+
+  return { view: history.stack[history.index]!, navigate, back, forward }
 }
 
 /** The current time, updated every `intervalMs`. */

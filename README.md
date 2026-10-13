@@ -91,6 +91,8 @@ Welchen Chip dein Mac hat, steht unter  → Über diesen Mac.
 
 - **Erster Start:** TISS-Kalender verbinden, bei TUWEL anmelden, Notizordner anlegen – Schritt für Schritt unter
   [Setup](#setup).
+- **Zurück und vor:** Die Daumentasten der Maus (zurück/vor) und Alt+←/→ (Mac: Option) springen zwischen den Ansichten,
+  die du zuletzt offen hattest – wie im Browser. In Textfeldern und im Notizeditor bleibt Alt+←/→ beim Cursor.
 - **Autostart:** in der App unter Einstellungen oder im Menü des Symbols.
 - **Schließen** beendet sout nicht: Das Hauptfenster wird zur Mini-Ansicht beim Symbol, ein Klick daneben schickt sie
   ins Symbol (in den Einstellungen abschaltbar). Ganz beenden mit Strg+Q (Mac: Cmd+Q) oder „Beenden“ im Menü.
@@ -494,8 +496,8 @@ und eine zweite Synchronisierung. Diese bringt einen Raumwechsel, einen verschob
 Prüfungsanmeldung, einen neuen Prüfungstermin und eine neue Aufgabe. sout startet unsichtbar damit, legt
 Screenshots der Ansichten und `report.json` in `smoke/` ab und meldet, ob alles geklappt hat. Geprüft wird unter
 anderem das Speichern der Notizen (von selbst, bei Änderungen von außen, bei Konflikten, beim Schließen), das
-Erkennen von Änderungen, wie sout jede Prüfung einordnet (offen, angemeldet, nicht nötig …) und dass PDFs nur aus dem
-Notizordner kommen. Nutzt einen eigenen Datenordner und nicht den
+Erkennen von Änderungen, wie sout jede Prüfung einordnet (offen, angemeldet, nicht nötig …), das Zurück- und
+Vorspringen zwischen Ansichten und dass PDFs nur aus dem Notizordner kommen. Nutzt einen eigenen Datenordner und nicht den
 Schlüsselbund.
 
 Ohne Testdaten geht es auch direkt: `node_modules/electron/dist/electron . --smoke-test=<ordner>` (unter Linux mit
