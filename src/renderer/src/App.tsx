@@ -3,6 +3,7 @@ import { Award, CalendarDays, ClipboardList, GraduationCap, NotebookPen, PanelLe
 import type { View } from '../../shared/types'
 import { Logo, ResizeHandle } from './components'
 import { currentSemester } from './lib/dates'
+import { useViewHistory } from './lib/hooks'
 import { clamp, useRemembered } from './lib/storage'
 import CalendarView from './views/CalendarView'
 import DeadlinesView from './views/DeadlinesView'
@@ -29,7 +30,7 @@ const NAV: { view: View; label: string; icon: LucideIcon }[] = [
 ]
 
 export default function App({ initialView, initialNote }: { initialView: View; initialNote?: string }) {
-  const [view, setView] = useState<View>(initialView)
+  const { view, navigate, back, forward } = useViewHistory(initialView)
   const [noteRequest, setNoteRequest] = useState<NoteRequest | null>(initialNote ? { path: initialNote, id: 0 } : null)
   // Once opened, the notes stay mounted: switching views keeps cursor, undo and the PDF next to it.
   const [notesOpened, setNotesOpened] = useState(view === 'notes')
@@ -44,18 +45,51 @@ export default function App({ initialView, initialNote }: { initialView: View; i
 
   const openNote = useCallback((path: string, fresh?: boolean) => {
     setNoteRequest({ path, fresh, id: Date.now() })
-    setView('notes')
-  }, [])
+    navigate('notes')
+  }, [navigate])
 
   // The tray menu and the mini window can ask for a specific view (and note).
   useEffect(
     () =>
       window.sout.onNavigate((next, note) => {
         if (note) openNote(note)
-        else setView(next)
+        else navigate(next)
       }),
-    [openNote]
+    [openNote, navigate]
   )
+
+  // The mouse's back/forward buttons (3 and 4) and Alt+←/→ step through the views visited. Not under
+  // an open dialog; Alt+←/→ stays with the cursor in text fields (also the notes editor).
+  useEffect(() => {
+    const modalOpen = (): boolean => document.querySelector('.modal-backdrop') !== null
+    const inTextField = (target: EventTarget | null): boolean =>
+      target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select, .cm-editor') !== null)
+    const sideButton = (event: MouseEvent): boolean => event.button === 3 || event.button === 4
+    const onMouseUp = (event: MouseEvent): void => {
+      if (!sideButton(event)) return
+      event.preventDefault()
+      if (!modalOpen()) (event.button === 3 ? back : forward)()
+    }
+    // Keep Chromium from doing anything of its own with the buttons.
+    const onAuxClick = (event: MouseEvent): void => {
+      if (sideButton(event)) event.preventDefault()
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+      if (modalOpen() || inTextField(event.target)) return
+      event.preventDefault()
+      ;(event.key === 'ArrowLeft' ? back : forward)()
+    }
+    window.addEventListener('mouseup', onMouseUp)
+    window.addEventListener('auxclick', onAuxClick)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('mouseup', onMouseUp)
+      window.removeEventListener('auxclick', onAuxClick)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [back, forward])
 
   return (
     <div className="app">
@@ -69,11 +103,11 @@ export default function App({ initialView, initialNote }: { initialView: View; i
         </div>
         <nav className="nav">
           {NAV.map((item) => (
-            <NavItem key={item.view} {...item} active={view === item.view} onSelect={setView} />
+            <NavItem key={item.view} {...item} active={view === item.view} onSelect={navigate} />
           ))}
         </nav>
         <div className="nav nav-bottom">
-          <NavItem view="settings" label="Einstellungen" icon={Settings} active={view === 'settings'} onSelect={setView} />
+          <NavItem view="settings" label="Einstellungen" icon={Settings} active={view === 'settings'} onSelect={navigate} />
           <button
             type="button"
             className="nav-item collapse-toggle"
@@ -99,28 +133,28 @@ export default function App({ initialView, initialNote }: { initialView: View; i
       {notesOpened && (
         <main className="content content-notes" hidden={view !== 'notes'}>
           <Suspense fallback={null}>
-            <NotesView request={noteRequest} active={view === 'notes'} onNavigate={setView} />
+            <NotesView request={noteRequest} active={view === 'notes'} onNavigate={navigate} />
           </Suspense>
         </main>
       )}
       {view === 'calendar' ? (
         <main className="content content-full">
-          <CalendarView onNavigate={setView} onOpenNote={openNote} />
+          <CalendarView onNavigate={navigate} onOpenNote={openNote} />
         </main>
       ) : (
         view !== 'notes' && (
           <main className="content">
             <div className="page">
               {view === 'today' ? (
-                <Today onNavigate={setView} />
+                <Today onNavigate={navigate} />
               ) : view === 'settings' ? (
                 <SettingsView />
               ) : view === 'exams' ? (
-                <ExamsView onNavigate={setView} />
+                <ExamsView onNavigate={navigate} />
               ) : view === 'grades' ? (
                 <GradesView />
               ) : (
-                <DeadlinesView onOpenNote={openNote} onNavigate={setView} />
+                <DeadlinesView onOpenNote={openNote} onNavigate={navigate} />
               )}
             </div>
           </main>
